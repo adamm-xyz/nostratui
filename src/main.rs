@@ -1,7 +1,5 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::env;
 use std::fs;
-use std::io::{Write,Read};
 use std::process::Command;
 
 use nostr_sdk::prelude::*;
@@ -10,12 +8,14 @@ use nostr_sdk::prelude::*;
 #[tokio::main]
 async fn main() -> Result<()> {
     //Generate keys and construct client
-    let keys: Keys = Keys::generate();
-    // let keys = Keys::parse("nsec1ufnus6pju578ste3v90xd5m2decpuzpql2295m3sknqcjzyys9ls0qlc85")?;
+    let env_key = env::var("NOSTR_KEY").unwrap();
+    let keys = Keys::parse(&env_key)?;
     let client = Client::new(keys);
 
     // Add and connect to relays
     client.add_relay("wss://relay.damus.io").await?;
+    client.add_relay("wss://nostr.wine").await?;
+    client.add_relay("wss://relay.rip").await?;
     client.connect().await;
 
     println!("Connected to relay!");
@@ -47,6 +47,6 @@ fn edit_string() -> String {
         .expect("Error: Editor exited with non-zero status");
 
     let content = fs::read_to_string(&temp_path);
-    fs::remove_file(&temp_path);
+    let _ = fs::remove_file(&temp_path);
     content.expect("blah")
 }
