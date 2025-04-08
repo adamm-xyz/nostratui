@@ -4,9 +4,14 @@ use std::process::Command;
 
 use nostr_sdk::prelude::*;
 
+use nostratui::cli::Flags;
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    //Get Flags
+    let flags = Flags::from_args();
+
     //Generate keys and construct client
     let env_key = env::var("NOSTR_KEY").unwrap();
     let keys = Keys::parse(&env_key)?;
@@ -20,7 +25,9 @@ async fn main() -> Result<()> {
 
     println!("Connected to relay!");
 
-    post(client).await;
+    if flags.post() {
+        post(client).await;
+    }
     Ok(())
 }
 
