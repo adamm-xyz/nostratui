@@ -20,6 +20,11 @@ async fn main() -> Result<()> {
 
     println!("Connected to relay!");
 
+    post(client).await;
+    Ok(())
+}
+
+async fn post(client: Client) -> Result<()> {
     println!("Attempting to publish note...");
     //Publish a note
     let note = edit_string();
