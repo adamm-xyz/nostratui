@@ -11,6 +11,7 @@ use nostr_sdk::prelude::*;
 async fn main() -> Result<()> {
     //Generate keys and construct client
     let keys: Keys = Keys::generate();
+    // let keys = Keys::parse("nsec1ufnus6pju578ste3v90xd5m2decpuzpql2295m3sknqcjzyys9ls0qlc85")?;
     let client = Client::new(keys);
 
     // Add and connect to relays
@@ -48,23 +49,4 @@ fn edit_string() -> String {
     let content = fs::read_to_string(&temp_path);
     fs::remove_file(&temp_path);
     content.expect("blah")
-
-    /*
-    let editor = var("EDITOR").unwrap();
-    let mut file_path = temp_dir();
-    file_path.push("editable");
-    File::create(&file_path).expect("Could not create file");
-
-    Command::new(editor)
-        .arg(&file_path)
-        .status()
-        .expect("Something went wrong");
-
-    let mut editable = String::new();
-    File::open(file_path)
-        .expect("Could not open file")
-        .read_to_string(&mut editable);
-
-    editable
-    */
 }
