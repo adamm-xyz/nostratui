@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
 
 use nostr_sdk::prelude::*;
 
@@ -17,17 +18,29 @@ async fn main() -> Result<()> {
     let keys = Keys::parse(&env_key)?;
     let client = Client::new(keys);
 
+
     // Add and connect to relays
     client.add_relay("wss://relay.damus.io").await?;
     client.add_relay("wss://nostr.wine").await?;
     client.add_relay("wss://relay.rip").await?;
     client.connect().await;
 
+
     println!("Connected to relay!");
 
-    if flags.post() {
-        post(client).await;
+    match true {
+        _ if flags.post() => post(client).await?,
+        _ if flags.fetch() => fetch(client).await?,
+        _ => (),
     }
+    Ok(())
+}
+
+async fn fetch(client: Client) -> Result<()> {
+    let public_key = PublicKey::from_bech32("npub1080l37pfvdpyuzasyuy2ytjykjvq3ylr5jlqlg7tvzjrh9r8vn3sf5yaph")?;
+    let filter = Filter::new().author(public_key).kind(Kind::Metadata);
+    let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
+    println!("{events:#?}");
     Ok(())
 }
 

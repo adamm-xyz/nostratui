@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Copy, Clone, PartialEq, Eq, Debug, ValueEnum)]
 pub enum Command {
     Post,
+    Fetch
 }
 
 #[allow(
@@ -32,5 +33,10 @@ impl Flags {
     /// Check if the command is "post"
     pub fn post(&self) -> bool {
         matches!(self.command, Some(Command::Post))
+    }
+
+    /// Check if the command is "fetch"
+    pub fn fetch(&self) -> bool {
+        matches!(self.command, Some(Command::Fetch))
     }
 }
