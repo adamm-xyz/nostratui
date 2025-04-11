@@ -43,7 +43,7 @@ impl<T> StatefulList<T> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
-                    0
+                    i
                 } else {
                     i + 1
                 }
@@ -57,7 +57,7 @@ impl<T> StatefulList<T> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.items.len() - 1
+                    i
                 } else {
                     i - 1
                 }
@@ -68,7 +68,57 @@ impl<T> StatefulList<T> {
     }
 }
 
-fn main() -> Result<(), io::Error> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    //Generate keys and construct client
+    let env_key = env::var("NOSTR_KEY").unwrap();
+    let keys = Keys::parse(&env_key)?;
+    let my_pub_key = keys.public_key();
+
+    let client = Client::new(keys.clone());
+
+    println!("Connecting to relays...");
+
+    // Add and connect to relays
+    client.add_relay("wss://relay.damus.io").await?;
+    client.add_relay("wss://nostr.wine").await?;
+    client.add_relay("wss://relay.rip").await?;
+    client.connect().await;
+    println!("Connected!");
+
+
+    println!("Getting followers...");
+    // Get followers
+    let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
+    let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
+    let mut followers = vec![];
+    if let Some(event) = events.first() {
+        let tags = &event.tags;
+        
+        for tag in tags.iter() {
+            if let Some(follower) = tag.content() {
+                let follower_pkey = PublicKey::from_hex(follower).unwrap();
+                followers.push(follower_pkey);
+            }
+        }
+    }
+    println!("Follow list populated!");
+
+    println!("Fetching notes from past 24 hours...");
+    let mut new_posts: Vec<String> = vec![];
+    for follower in followers {
+        let filter = Filter::new().author(follower).kind(Kind::TextNote).since(Timestamp::now() - Timestamp::from_secs(60*60*24));
+        let events = client.fetch_events(filter, Duration::from_secs(30)).await?;
+        for event in events {
+            let content = &event.content;
+            new_posts.push(content.to_string());
+        }
+    }
+    println!("{} new posts", new_posts.len());
+    println!("Fetched!");
+    println!("Starting ratatui!");
+
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -76,22 +126,8 @@ fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Create a vector of strings for our list
-    let items = vec![
-        "Important meeting agenda".to_string(),
-        "Project update from Alice".to_string(),
-        "Weekly newsletter".to_string(),
-        "Your subscription renewal".to_string(),
-        "Notes from yesterday's call".to_string(),
-        "Budget approval request".to_string(),
-        "New product announcement".to_string(),
-        "Server maintenance notification".to_string(),
-        "Invitation: Team lunch next week".to_string(),
-        "Quarterly report draft".to_string(),
-    ];
-
     // Create our stateful list
-    let mut stateful_list = StatefulList::with_items(items);
+    let mut stateful_list = StatefulList::with_items(new_posts);
 
     // Run the app
     let res = run_app(&mut terminal, &mut stateful_list);
@@ -108,6 +144,8 @@ fn main() -> Result<(), io::Error> {
     if let Err(err) = res {
         println!("{:?}", err);
     }
+    /*
+    */
 
     Ok(())
 }
@@ -169,46 +207,6 @@ fn ui<B: ratatui::backend::Backend>(
 
     // Render the list with its state
     f.render_stateful_widget(list, chunks[0], &mut stateful_list.state);
-}
-
-/*
-#[tokio::main]
-async fn main() -> Result<()> {
-    //Get Flags
-    let flags = Flags::from_args();
-    //run_nostr_client(&flags).await?;
-    Ok(())
-}
-*/
-
-async fn run_nostr_client(flags: &Flags) -> Result<()> {
-    //Generate keys and construct client
-    let env_key = env::var("NOSTR_KEY").unwrap();
-    let keys = Keys::parse(&env_key)?;
-    let client = Client::new(keys);
-
-    // Add and connect to relays
-    client.add_relay("wss://relay.damus.io").await?;
-    client.add_relay("wss://nostr.wine").await?;
-    client.add_relay("wss://relay.rip").await?;
-    client.connect().await;
-
-    println!("Connected to relay!");
-
-    match true {
-        _ if flags.post() => post(client).await?,
-        _ if flags.fetch() => fetch(client).await?,
-        _ => (),
-    }
-    Ok(())
-}
-
-async fn fetch(client: Client) -> Result<()> {
-    let public_key = PublicKey::from_bech32("npub1080l37pfvdpyuzasyuy2ytjykjvq3ylr5jlqlg7tvzjrh9r8vn3sf5yaph")?;
-    let filter = Filter::new().author(public_key).kind(Kind::Metadata);
-    let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
-    println!("{events:#?}");
-    Ok(())
 }
 
 async fn post(client: Client) -> Result<()> {
