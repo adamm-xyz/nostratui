@@ -70,6 +70,9 @@ impl<T> StatefulList<T> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    //Get Flags
+    let flags = Flags::from_args();
+
     //Generate keys and construct client
     let env_key = env::var("NOSTR_KEY").unwrap();
     let keys = Keys::parse(&env_key)?;
@@ -86,73 +89,78 @@ async fn main() -> Result<()> {
     client.connect().await;
     println!("Connected!");
 
+    if flags.post() {
+        post(&client).await
 
-    println!("Getting followers...");
-    // Get followers
-    let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
-    let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
-    let mut followers = vec![];
-    if let Some(event) = events.first() {
-        let tags = &event.tags;
-        
-        for tag in tags.iter() {
-            if let Some(follower) = tag.content() {
-                let follower_pkey = PublicKey::from_hex(follower).unwrap();
-                followers.push(follower_pkey);
+    } else {
+        println!("Getting followers...");
+        // Get followers
+        let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
+        let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
+        let mut followers = vec![];
+        if let Some(event) = events.first() {
+            let tags = &event.tags;
+            
+            for tag in tags.iter() {
+                if let Some(follower) = tag.content() {
+                    let follower_pkey = PublicKey::from_hex(follower).unwrap();
+                    followers.push(follower_pkey);
+                }
             }
         }
-    }
-    println!("Follow list populated!");
+        println!("Follow list populated!");
 
-    println!("Fetching notes from past 24 hours...");
-    let mut new_posts: Vec<String> = vec![];
-    for follower in followers {
-        let filter = Filter::new().author(follower).kind(Kind::TextNote).since(Timestamp::now() - Timestamp::from_secs(60*60*24));
-        let events = client.fetch_events(filter, Duration::from_secs(30)).await?;
-        for event in events {
-            let content = &event.content;
-            new_posts.push(content.to_string());
+        println!("Fetching notes from past 24 hours...");
+        let mut new_posts: Vec<String> = vec![];
+        for follower in followers {
+            let filter = Filter::new().author(follower).kind(Kind::TextNote).since(Timestamp::now() - Timestamp::from_secs(60*60*24));
+            let events = client.fetch_events(filter, Duration::from_secs(30)).await?;
+            for event in events {
+                let content = &event.content;
+                new_posts.push(content.to_string());
+            }
         }
+        println!("{} new posts", new_posts.len());
+        println!("Fetched!");
+        println!("Starting ratatui!");
+
+
+        // Setup terminal
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        // Create our stateful list
+        let mut stateful_list = StatefulList::with_items(new_posts);
+
+        // Run the app
+        let res = run_app(&mut terminal, &mut stateful_list, client);
+
+        // Restore terminal
+        disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        terminal.show_cursor()?;
+
+        if let Err(err) = res {
+            println!("{:?}", err);
+        }
+        /*
+        */
+        Ok(())
     }
-    println!("{} new posts", new_posts.len());
-    println!("Fetched!");
-    println!("Starting ratatui!");
 
-
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // Create our stateful list
-    let mut stateful_list = StatefulList::with_items(new_posts);
-
-    // Run the app
-    let res = run_app(&mut terminal, &mut stateful_list);
-
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    if let Err(err) = res {
-        println!("{:?}", err);
-    }
-    /*
-    */
-
-    Ok(())
 }
 
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     stateful_list: &mut StatefulList<String>,
+    client: Client,
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, stateful_list))?;
@@ -163,7 +171,14 @@ fn run_app<B: ratatui::backend::Backend>(
                 KeyCode::Esc => return Ok(()),
                 KeyCode::Down | KeyCode::Char('j') => stateful_list.next(),
                 KeyCode::Up | KeyCode::Char('k') => stateful_list.previous(),
-                //KeyCode::Char('n') => #create post,
+                KeyCode::Char('n') => {
+                    let client_clone = client.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = post(&client_clone).await {
+                            eprintln!("Error posting: {:?}", e);
+                        }
+                    });
+                },
                 KeyCode::Enter => {
                     // Here you could handle what happens when an item is selected
                     // For now, we'll just continue the loop
@@ -209,7 +224,7 @@ fn ui<B: ratatui::backend::Backend>(
     f.render_stateful_widget(list, chunks[0], &mut stateful_list.state);
 }
 
-async fn post(client: Client) -> Result<()> {
+async fn post(client: &Client) -> Result<()> {
     println!("Attempting to publish note...");
     //Publish a note
     let note = edit_string();
