@@ -1,10 +1,10 @@
 use clap::{ArgAction, Parser, ValueEnum};
-use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, ValueEnum)]
 pub enum Command {
     Post,
-    Fetch
+    Fetch,
+    Stream
 }
 
 #[allow(
@@ -38,5 +38,10 @@ impl Flags {
     /// Check if the command is "fetch"
     pub fn fetch(&self) -> bool {
         matches!(self.command, Some(Command::Fetch))
+    }
+
+    /// Check if the command is "fetch"
+    pub fn stream(&self) -> bool {
+        matches!(self.command, Some(Command::Stream))
     }
 }
