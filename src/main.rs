@@ -1,11 +1,11 @@
 use std::env;
 use std::fs;
 use std::process::Command;
-use std::time::Duration;
 
 use nostr_sdk::prelude::*;
 
 use nostratui::cli::Flags;
+use nostratui::client::NostrClient;
 
 use std::io;
 use ratatui::{
@@ -75,53 +75,22 @@ async fn main() -> Result<()> {
 
     //Generate keys and construct client
     let env_key = env::var("NOSTR_KEY").unwrap();
-    let keys = Keys::parse(&env_key)?;
-    let my_pub_key = keys.public_key();
 
-    let client = Client::new(keys.clone());
-
-    println!("Connecting to relays...");
-
-    // Add and connect to relays
-    client.add_relay("wss://relay.damus.io").await?;
-    client.add_relay("wss://nostr.wine").await?;
-    client.add_relay("wss://relay.rip").await?;
-    client.connect().await;
-    println!("Connected!");
+    let client = NostrClient::new(env_key);
+    let relay_list = vec![String::from("relay")];
+    client.connect_relays(relay_list).await?;
 
     if flags.post() {
-        post(&client).await
-
+        //client post
+        let note = edit_string();
+        client.post_note(note).await
     } else {
-        println!("Getting followers...");
-        // Get followers
-        let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
-        let events = client.fetch_events(filter, Duration::from_secs(10)).await?;
-        let mut followers = vec![];
-        if let Some(event) = events.first() {
-            let tags = &event.tags;
-            
-            for tag in tags.iter() {
-                if let Some(follower) = tag.content() {
-                    let follower_pkey = PublicKey::from_hex(follower).unwrap();
-                    followers.push(follower_pkey);
-                }
-            }
-        }
-        println!("Follow list populated!");
-
-        println!("Fetching notes from past 24 hours...");
-        let mut new_posts: Vec<String> = vec![];
-        for follower in followers {
-            let filter = Filter::new().author(follower).kind(Kind::TextNote).since(Timestamp::now() - Timestamp::from_secs(60*60*24));
-            let events = client.fetch_events(filter, Duration::from_secs(30)).await?;
-            for event in events {
-                let content = &event.content;
-                new_posts.push(content.to_string());
-            }
-        }
+        // Get following
+        client.fetch_following().await;
+        // Get new posts
+        let new_posts = client.fetch_notes_since(
+            Timestamp::from_secs(60*60*24)).await?;
         println!("{} new posts", new_posts.len());
-        println!("Fetched!");
         println!("Starting ratatui!");
 
 
@@ -146,11 +115,11 @@ async fn main() -> Result<()> {
             DisableMouseCapture
         )?;
         terminal.show_cursor()?;
-
         if let Err(err) = res {
             println!("{:?}", err);
         }
         /*
+
         */
         Ok(())
     }
@@ -160,7 +129,7 @@ async fn main() -> Result<()> {
 fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     stateful_list: &mut StatefulList<String>,
-    client: Client,
+    client: NostrClient,
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, stateful_list))?;
@@ -174,7 +143,7 @@ fn run_app<B: ratatui::backend::Backend>(
                 KeyCode::Char('n') => {
                     let client_clone = client.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = post(&client_clone).await {
+                        if let Err(e) = &client_clone.post_note("test".to_string()).await {
                             eprintln!("Error posting: {:?}", e);
                         }
                     });
@@ -222,21 +191,6 @@ fn ui<B: ratatui::backend::Backend>(
 
     // Render the list with its state
     f.render_stateful_widget(list, chunks[0], &mut stateful_list.state);
-}
-
-async fn post(client: &Client) -> Result<()> {
-    println!("Attempting to publish note...");
-    //Publish a note
-    let note = edit_string();
-    let builder = EventBuilder::text_note(note).pow(20);
-    let output = client.send_event_builder(builder).await?;
-
-    //Inspect output
-    println!("Event ID: {}", output.id().to_bech32()?);
-    println!("Sent to: {:?}", output.success);
-    println!("Not sent to: {:?}", output.failed);
-
-    Ok(())
 }
 
 fn edit_string() -> String {
