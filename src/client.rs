@@ -1,6 +1,8 @@
 use nostr_sdk::prelude::*;
 use std::time::Duration;
 
+use crate::app::Post;
+
 #[derive(Clone)]
 pub struct NostrClient {
     //secret key
@@ -43,8 +45,8 @@ impl NostrClient {
         following_list
     }
 
-    pub async fn fetch_notes_since(&self,timestamp: Timestamp) -> Result<Vec<String>> {
-        let mut new_posts: Vec<String> = vec![];
+    pub async fn fetch_notes_since(&self,timestamp: Timestamp) -> Result<Vec<Post>> {
+        let mut new_posts: Vec<Post> = vec![];
 
         //IMPORTANT: Update this to get_followers
         let following_list = self.fetch_following().await;
@@ -53,8 +55,17 @@ impl NostrClient {
                 .since(Timestamp::now() - timestamp);
             let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
             for event in events {
+                /*
                 let content = &event.content;
                 new_posts.push(content.to_string());
+                */
+                new_posts.push(
+                    Post {
+                        user: event.pubkey.to_string(),
+                        time: event.created_at.to_string(),
+                        content: event.content.to_string(),
+                    }
+                );
             }
         }
         Ok(new_posts)

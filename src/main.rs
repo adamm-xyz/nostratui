@@ -63,8 +63,9 @@ async fn main() -> Result<()> {
         // Get following
         client.fetch_following().await;
         // Get new posts
-        let new_posts = client.fetch_notes_since(
-            Timestamp::from_secs(60*60*24)).await?;
+        let new_posts = client
+            .fetch_notes_since(
+                Timestamp::from_secs(60*60*24)).await?;
 
         // Setup terminal
         enable_raw_mode()?;

@@ -5,14 +5,22 @@ use ratatui::{
     layout::{Layout, Constraint, Direction},
     style::{Style, Color, Modifier},
     Terminal, Frame,
+    text::Line,
+    prelude::Span,
 };
 use crossterm::{
     event::{self, Event, KeyCode},
 };
 
+pub struct Post {
+    pub user: String,
+    pub time: String,
+    pub content: String,
+}
+
 pub fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    stateful_list: &mut StatefulList<String>
+    stateful_list: &mut StatefulList<Post>
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui(f, stateful_list))?;
@@ -45,7 +53,7 @@ pub fn run_app<B: ratatui::backend::Backend>(
 
 fn ui<B: ratatui::backend::Backend>(
     f: &mut Frame<B>,
-    stateful_list: &mut StatefulList<String>,
+    stateful_list: &mut StatefulList<Post>,
 ) {
     // Create the layout
     let chunks = Layout::default()
@@ -54,25 +62,43 @@ fn ui<B: ratatui::backend::Backend>(
         .constraints([Constraint::Percentage(100)].as_ref())
         .split(f.size());
 
-    // Create the list items
+    // Create the feed of posts
     let items: Vec<ListItem> = stateful_list.items
         .iter()
-        .map(|i| {
-            ListItem::new(i.as_str())
-                .style(Style::default())
+        .map(|post| {
+            // Create the header line with username and timestamp
+            let header = Line::from(vec![
+                Span::styled(
+                    format!("{} posted at {}", post.user, post.time),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                )
+            ]);
+            
+            // Create the content as a separate line with proper wrapping
+            let content = Line::from(vec![
+                Span::raw(&post.content)
+            ]);
+            
+            // Combine them into a multi-line item with spacing
+            ListItem::new(vec![
+                header,
+                Line::from(""), // Empty line for spacing
+                content,
+                Line::from(""), // Empty line for spacing between posts
+            ])
+            .style(Style::default())
         })
         .collect();
 
     // Create a List from the items and highlight the currently selected one
     let list = List::new(items)
-        .block(Block::default().title("posts").borders(Borders::ALL))
+        .block(Block::default().title("Feed").borders(Borders::ALL))
         .highlight_style(
             Style::default()
                 .bg(Color::Gray)
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD)
-        )
-        .highlight_symbol("> ");
+        );
 
     // Render the list with its state
     f.render_stateful_widget(list, chunks[0], &mut stateful_list.state);
