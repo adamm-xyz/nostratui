@@ -9,3 +9,6 @@ crossterm = "0.27.0"
 nostr-sdk = "0.40"
 tokio = { version = ">=1.37", default-features = false }
 clap = { version = "4.5.31", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"

@@ -1,6 +1,11 @@
 use std::env;
+use std::fs::File;
 use std::fs;
+use std::io::BufReader;
 use std::process::Command;
+
+
+use serde::{Deserialize, Serialize};
 
 use nostr_sdk::prelude::*;
 
@@ -68,17 +73,35 @@ impl<T> StatefulList<T> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    key: String,
+    relays: Vec<String>
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     //Get Flags
     let flags = Flags::from_args();
 
-    //Generate keys and construct client
-    let env_key = env::var("NOSTR_KEY").unwrap();
+   let config_path = dirs::home_dir()
+        .expect("Could not find home directory")
+        .join(".config/nostratui/config.json"); 
 
-    let client = NostrClient::new(env_key);
-    let relay_list = vec![String::from("relay")];
-    client.connect_relays(relay_list).await?;
+    // Open the file
+    let file = File::open(config_path)?;
+    let reader = BufReader::new(file);
+    
+    // Parse the JSON
+    let config: Config = serde_json::from_reader(reader)?;
+    
+    // Extract values into variables
+    let user_key = config.key;
+    let relays = config.relays;
+
+
+    let client = NostrClient::new(user_key);
+    client.connect_relays(relays).await?;
 
     if flags.post() {
         //client post
@@ -90,8 +113,6 @@ async fn main() -> Result<()> {
         // Get new posts
         let new_posts = client.fetch_notes_since(
             Timestamp::from_secs(60*60*24)).await?;
-        println!("{} new posts", new_posts.len());
-        println!("Starting ratatui!");
 
 
         // Setup terminal
