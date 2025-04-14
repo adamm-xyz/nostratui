@@ -13,7 +13,7 @@ pub enum Command {
 )]
 #[derive(Parser, Debug, Default)]
 #[command(
-    about = concat!(env!("CARGO_CRATE_NAME"), " - list directory contents"), 
+    about = concat!(env!("CARGO_CRATE_NAME"), " - minimalistic nostr client"), 
     disable_help_flag = true
 )]
 pub struct Flags {

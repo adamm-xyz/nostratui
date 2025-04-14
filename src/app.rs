@@ -40,11 +40,9 @@ pub fn run_app<B: ratatui::backend::Backend>(
                         }
                     });
                 },
-                */
                 KeyCode::Enter => {
-                    // Here you could handle what happens when an item is selected
-                    // For now, we'll just continue the loop
                 }
+                */
                 _ => {}
             }
         }

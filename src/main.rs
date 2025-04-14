@@ -6,13 +6,10 @@ use std::process::Command;
 use std::io;
 use ratatui::{
     backend::CrosstermBackend,
-    widgets::{Block, Borders, List, ListItem, ListState},
-    layout::{Layout, Constraint, Direction},
-    style::{Style, Color, Modifier},
-    Terminal, Frame,
+    Terminal,
 };
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -60,45 +57,47 @@ async fn main() -> Result<()> {
         let note = edit_string();
         client.post_note(note).await
     } else {
-        // Get following
-        client.fetch_following().await;
-        // Get new posts
-        let new_posts = client
-            .fetch_notes_since(
-                Timestamp::from_secs(60*60*24)).await?;
-
-        // Setup terminal
-        enable_raw_mode()?;
-        let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-        let backend = CrosstermBackend::new(stdout);
-        let mut terminal = Terminal::new(backend)?;
-
-        // Create our stateful list
-        let mut stateful_list = StatefulList::with_items(new_posts);
-
-        // Run the app
-        let res = run_app(&mut terminal, &mut stateful_list);
-
-        // Restore terminal
-        disable_raw_mode()?;
-        execute!(
-            terminal.backend_mut(),
-            LeaveAlternateScreen,
-            DisableMouseCapture
-        )?;
-        terminal.show_cursor()?;
-        if let Err(err) = res {
-            println!("{:?}", err);
-        }
-        /*
-
-        */
-        Ok(())
+        start_tui(client).await
     }
 
 }
 
+async fn start_tui(client: NostrClient) -> Result<()> {
+    // Get following
+    client.fetch_following().await;
+    // Get new posts
+    let new_posts = client
+        .fetch_notes_since(
+            Timestamp::from_secs(60*60*24)).await?;
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // Create our stateful list
+    let mut stateful_list = StatefulList::with_items(new_posts);
+
+    // Run the app
+    let res = run_app(&mut terminal, &mut stateful_list);
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+    if let Err(err) = res {
+        println!("{:?}", err);
+    }
+    /*
+
+    */
+    Ok(())
+}
 
 fn edit_string() -> String {
     let editor = env::var("EDITOR")

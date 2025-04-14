@@ -16,8 +16,8 @@ impl NostrClient {
             client: Client::new(Keys::parse(&key_str).unwrap()),
             key: Keys::parse(&key_str).unwrap()
         }
-        //Self { client, key }
     }
+
     pub async fn connect_relays(&self, relays: Vec<String>) -> Result<()> {
         for relay in relays {
             self.client.add_relay(relay).await?;
@@ -55,10 +55,6 @@ impl NostrClient {
                 .since(Timestamp::now() - timestamp);
             let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
             for event in events {
-                /*
-                let content = &event.content;
-                new_posts.push(content.to_string());
-                */
                 new_posts.push(
                     Post {
                         user: event.pubkey.to_string(),
