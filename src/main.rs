@@ -1,8 +1,9 @@
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::BufReader;
+use std::io::{self, Write, BufReader};
 use std::process::Command;
-use std::io;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use ratatui::{
     backend::CrosstermBackend,
     Terminal,
@@ -27,6 +28,7 @@ struct Config {
     key: String,
     relays: Vec<String>,
     contacts: Vec<String>,
+    last_login: Option<SystemTime>,
 }
 
 #[tokio::main]
@@ -48,6 +50,27 @@ async fn main() -> Result<()> {
     // Extract values into variables
     let user_key = config.key.clone();
     let relays = config.relays.clone();
+    let mut last_login = Timestamp::now();
+
+    match config.last_login.clone() {
+        Some(login_date) => {
+            last_login = Timestamp::from_secs(
+                login_date
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+            )
+        },
+        None => {
+            last_login = Timestamp::now();
+            config.last_login = Some(SystemTime::now());
+            let json = serde_json::to_string_pretty(&config).unwrap();
+            let mut file = File::create(&config_path)?;
+            file.write_all(json.as_bytes())?;
+        },
+    }
+
+
 
     let mut client = NostrClient::new(user_key);
     client.connect_relays(relays).await?;
@@ -74,16 +97,15 @@ async fn main() -> Result<()> {
             serde_json::to_writer_pretty(file, &config)?;
         }
         client.set_contacts(config.contacts).await;
-        start_tui(client).await
+        start_tui(client, last_login).await
     }
 
 }
 
-async fn start_tui(client: NostrClient) -> Result<()> {
+async fn start_tui(client: NostrClient, login_date: Timestamp) -> Result<()> {
     // Get new posts
     let new_posts = client
-        .fetch_notes_since(
-            Timestamp::from_secs(60*60*24)).await?;
+        .fetch_notes_since(login_date).await?;
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
