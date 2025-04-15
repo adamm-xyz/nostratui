@@ -1,6 +1,5 @@
 use std::env;
-use std::fs::File;
-use std::fs;
+use std::fs::{self, File, OpenOptions};
 use std::io::BufReader;
 use std::process::Command;
 use std::io;
@@ -26,7 +25,8 @@ use nostratui::app::{StatefulList,run_app};
 #[derive(Serialize, Deserialize, Debug)]
 struct Config {
     key: String,
-    relays: Vec<String>
+    relays: Vec<String>,
+    contacts: Vec<String>,
 }
 
 #[tokio::main]
@@ -39,17 +39,17 @@ async fn main() -> Result<()> {
         .join(".config/nostratui/config.json"); 
 
     // Open the file
-    let file = File::open(config_path)?;
+    let file = File::open(&config_path)?;
     let reader = BufReader::new(file);
     
     // Parse the JSON
-    let config: Config = serde_json::from_reader(reader)?;
+    let mut config: Config = serde_json::from_reader(reader)?;
     
     // Extract values into variables
-    let user_key = config.key;
-    let relays = config.relays;
+    let user_key = config.key.clone();
+    let relays = config.relays.clone();
 
-    let client = NostrClient::new(user_key);
+    let mut client = NostrClient::new(user_key);
     client.connect_relays(relays).await?;
 
     if flags.post() {
@@ -57,14 +57,29 @@ async fn main() -> Result<()> {
         let note = edit_string();
         client.post_note(note).await
     } else {
+        if config.contacts.is_empty() {
+            config.contacts = client.fetch_contacts()
+                .await
+                .into_iter()
+                .map(|pk| pk.to_bech32().unwrap())
+                .collect();
+
+            // Create/open the file for writing
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(&config_path)?;
+            
+            // Serialize the updated config to JSON and write it to the file
+            serde_json::to_writer_pretty(file, &config)?;
+        }
+        client.set_contacts(config.contacts).await;
         start_tui(client).await
     }
 
 }
 
 async fn start_tui(client: NostrClient) -> Result<()> {
-    // Get following
-    client.fetch_following().await;
     // Get new posts
     let new_posts = client
         .fetch_notes_since(
