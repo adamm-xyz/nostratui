@@ -28,8 +28,10 @@ async fn main() -> Result<()> {
 
     if flags.post() {
         //client post
-        let note = edit_string();
-        client.post_note(note).await
+        match edit_string() {
+            Ok(note) => client.post_note(note).await?,
+            Err(e) => eprintln!("Error creating post: {}", e),
+        }
     } else {
         if config.contacts.is_empty() {
             config.contacts = client.fetch_contacts()
@@ -38,25 +40,31 @@ async fn main() -> Result<()> {
                 .map(|pk| pk.to_bech32().unwrap())
                 .collect();
         }
-        client.set_contacts(config.contacts).await;
-        app::start_tui(client, last_login).await
+        client.set_contacts(config.contacts).await?;
+        app::start_tui(client, last_login).await?;
     }
-
+    Ok(())
 }
 
-fn edit_string() -> String {
+fn edit_string() -> Result<String> {
     let editor = env::var("EDITOR")
         .unwrap_or_else(|_| "vi".to_string());
 
     let mut temp_path = env::temp_dir();
     temp_path.push("note");
 
-    Command::new(editor)
+    let status = Command::new(editor)
         .arg(&temp_path)
-        .status()
-        .expect("Error: Editor exited with non-zero status");
+        .status()?;
 
-    let content = fs::read_to_string(&temp_path);
+    if !status.success() {
+        return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Editor exited with non-zero status"
+        )));
+    }
+
+    let content = fs::read_to_string(&temp_path)?;
     let _ = fs::remove_file(&temp_path);
-    content.expect("blah")
+    Ok(content)
 }
