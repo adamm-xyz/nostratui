@@ -73,7 +73,7 @@ impl NostrClient {
                 new_posts.push(
                     Post {
                         user: event.pubkey.to_string(),
-                        time: event.created_at.to_string(),
+                        time: event.created_at.as_u64(),
                         content: event.content.to_string(),
                     }
                 );

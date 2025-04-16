@@ -33,11 +33,13 @@ struct Config {
 
 pub fn get_last_login(config: &Config) -> Timestamp {
     match config.last_login {
+        //If config has last login saved
         Some(login_date) => {
             Timestamp::from_secs(login_date)
         }
+        //If the config does not have login date
         None => {
-            Timestamp::now()
+            Timestamp::from_secs(60*60*24*7)
         }
     }
 }
@@ -63,6 +65,7 @@ async fn main() -> Result<()> {
     let relays = config.relays.clone();
     let last_login = get_last_login(&config);
 
+    //Save last login date as now and write it to config file
     let timestamp_now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time traveler?")
@@ -105,8 +108,9 @@ async fn main() -> Result<()> {
 
 async fn start_tui(client: NostrClient, login_date: Timestamp) -> Result<()> {
     // Get new posts
-    let new_posts = client
+    let mut new_posts = client
         .fetch_notes_since(login_date).await?;
+    new_posts.sort_by_key(|post| std::cmp::Reverse(post.time));
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

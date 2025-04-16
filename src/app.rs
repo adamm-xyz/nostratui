@@ -14,7 +14,7 @@ use crossterm::{
 
 pub struct Post {
     pub user: String,
-    pub time: String,
+    pub time: u64,
     pub content: String,
 }
 
