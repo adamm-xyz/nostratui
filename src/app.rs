@@ -1,4 +1,6 @@
 use std::io;
+use crate::client::NostrClient;
+use nostr_sdk::Timestamp;
 
 use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState},
@@ -6,16 +8,55 @@ use ratatui::{
     style::{Style, Color, Modifier},
     Terminal, Frame,
     text::Line,
-    prelude::Span,
+    prelude::{Span,CrosstermBackend},
 };
 use crossterm::{
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    execute,
     event::{self, Event, KeyCode},
+    event::{DisableMouseCapture, EnableMouseCapture},
 };
 
 pub struct Post {
     pub user: String,
     pub time: u64,
     pub content: String,
+}
+
+// Handle TUI setup and teardown
+pub async fn start_tui(client: NostrClient, login_date: Timestamp) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // Get new posts
+    let mut new_posts = client
+        .fetch_notes_since(login_date).await?;
+    new_posts.sort_by_key(|post| std::cmp::Reverse(post.time));
+    
+    // Create our stateful list
+    let mut stateful_list = StatefulList::with_items(new_posts);
+
+    // Run the app
+    let res = run_app(&mut terminal, &mut stateful_list);
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+    
+    if let Err(err) = res {
+        eprintln!("{:?}", err);
+    }
+    
+    Ok(())
 }
 
 pub fn run_app<B: ratatui::backend::Backend>(
