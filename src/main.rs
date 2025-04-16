@@ -1,8 +1,7 @@
 use std::env;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write, BufReader};
+use std::fs;
+use std::io;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ratatui::{
     backend::CrosstermBackend,
@@ -14,70 +13,30 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-use serde::{Deserialize, Serialize};
 
 use nostr_sdk::prelude::*;
 
 use nostratui::cli::Flags;
 use nostratui::client::NostrClient;
 use nostratui::app::{StatefulList,run_app};
+use nostratui::config::Config;
 
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Config {
-    key: String,
-    relays: Vec<String>,
-    contacts: Vec<String>,
-    last_login: Option<u64>,
-}
-
-pub fn get_last_login(config: &Config) -> Timestamp {
-    match config.last_login {
-        //If config has last login saved
-        Some(login_date) => {
-            Timestamp::from_secs(login_date)
-        }
-        //If the config does not have login date
-        None => {
-            Timestamp::from_secs(60*60*24*7)
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     //Get Flags
     let flags = Flags::from_args();
 
-   let config_path = dirs::home_dir()
-        .expect("Could not find home directory")
-        .join(".config/nostratui/config.json"); 
+    // Load config
+    let (mut config, config_path) = Config::load()?;
 
-    // Open the file
-    let file = File::open(&config_path)?;
-    let reader = BufReader::new(file);
-    
-    // Parse the JSON
-    let mut config: Config = serde_json::from_reader(reader)?;
-    
-    // Extract values into variables
-    let user_key = config.key.clone();
-    let relays = config.relays.clone();
-    let last_login = get_last_login(&config);
+    // Update last login time
+    let last_login = config.get_last_login();
+    config.update_last_login();
+    config.save(&config_path)?;
 
-    //Save last login date as now and write it to config file
-    let timestamp_now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time traveler?")
-        .as_secs() as u64;
-
-    config.last_login = Some(timestamp_now);
-    let json = serde_json::to_string_pretty(&config).unwrap();
-    let mut file = File::create(&config_path)?;
-    file.write_all(json.as_bytes())?;
-
-    let mut client = NostrClient::new(user_key);
-    client.connect_relays(relays).await?;
+    let mut client = NostrClient::new(config.key.clone());
+    client.connect_relays(config.relays.clone()).await?;
 
     if flags.post() {
         //client post
@@ -91,14 +50,6 @@ async fn main() -> Result<()> {
                 .map(|pk| pk.to_bech32().unwrap())
                 .collect();
 
-            // Create/open the file for writing
-            let file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open(&config_path)?;
-            
-            // Serialize the updated config to JSON and write it to the file
-            serde_json::to_writer_pretty(file, &config)?;
         }
         client.set_contacts(config.contacts).await;
         start_tui(client, last_login).await
