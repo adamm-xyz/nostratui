@@ -28,7 +28,18 @@ struct Config {
     key: String,
     relays: Vec<String>,
     contacts: Vec<String>,
-    last_login: Option<SystemTime>,
+    last_login: Option<u64>,
+}
+
+pub fn get_last_login(config: &Config) -> Timestamp {
+    match config.last_login {
+        Some(login_date) => {
+            Timestamp::from_secs(login_date)
+        }
+        None => {
+            Timestamp::now()
+        }
+    }
 }
 
 #[tokio::main]
@@ -50,27 +61,17 @@ async fn main() -> Result<()> {
     // Extract values into variables
     let user_key = config.key.clone();
     let relays = config.relays.clone();
-    let mut last_login = Timestamp::now();
+    let last_login = get_last_login(&config);
 
-    match config.last_login.clone() {
-        Some(login_date) => {
-            last_login = Timestamp::from_secs(
-                login_date
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-            )
-        },
-        None => {
-            last_login = Timestamp::now();
-            config.last_login = Some(SystemTime::now());
-            let json = serde_json::to_string_pretty(&config).unwrap();
-            let mut file = File::create(&config_path)?;
-            file.write_all(json.as_bytes())?;
-        },
-    }
+    let timestamp_now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time traveler?")
+        .as_secs() as u64;
 
-
+    config.last_login = Some(timestamp_now);
+    let json = serde_json::to_string_pretty(&config).unwrap();
+    let mut file = File::create(&config_path)?;
+    file.write_all(json.as_bytes())?;
 
     let mut client = NostrClient::new(user_key);
     client.connect_relays(relays).await?;
