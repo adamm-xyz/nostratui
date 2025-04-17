@@ -8,6 +8,7 @@ use nostratui::cli::Flags;
 use nostratui::client::NostrClient;
 use nostratui::app;
 use nostratui::config::Config;
+use nostratui::cache;
 
 
 #[tokio::main]
@@ -18,11 +19,7 @@ async fn main() -> Result<()> {
     // Load config
     let (mut config, config_path) = Config::load()?;
 
-    // Update last login time
-    let last_login = config.get_last_login();
-    config.update_last_login();
-    config.save(&config_path)?;
-
+    // Initialize client and connect relays
     let mut client = NostrClient::new(config.key.clone());
     client.connect_relays(config.relays.clone()).await?;
 
@@ -33,6 +30,11 @@ async fn main() -> Result<()> {
             Err(e) => eprintln!("Error creating post: {}", e),
         }
     } else {
+        // Get last login time
+        let last_login = config.get_last_login();
+        println!("{:?}",last_login.clone().as_u64());
+
+        // Get contacts
         if config.contacts.is_empty() {
             config.contacts = client.fetch_contacts()
                 .await
@@ -40,8 +42,17 @@ async fn main() -> Result<()> {
                 .map(|pk| pk.to_bech32().unwrap())
                 .collect();
         }
-        client.set_contacts(config.contacts).await?;
-        app::start_tui(client, last_login).await?;
+        client.set_contacts(config.contacts.clone()).await?;
+
+        // Get posts to read, add to cache
+        let new_posts = client.fetch_notes_since(last_login).await?;
+        cache::save_posts_to_cache(new_posts);
+
+        // Save new config
+        config.update_last_login();
+        config.save(&config_path)?;
+
+        app::start_tui();
     }
     Ok(())
 }

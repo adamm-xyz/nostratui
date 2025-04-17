@@ -1,6 +1,6 @@
 use std::io;
-use crate::client::NostrClient;
-use nostr_sdk::Timestamp;
+use serde::{Deserialize, Serialize};
+use crate::cache;
 
 use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState},
@@ -17,14 +17,16 @@ use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
 };
 
+#[derive(Serialize, Deserialize)]
 pub struct Post {
     pub user: String,
     pub time: u64,
     pub content: String,
+    pub id: String,
 }
 
 // Handle TUI setup and teardown
-pub async fn start_tui(client: NostrClient, login_date: Timestamp) -> std::result::Result<(), Box<dyn std::error::Error>> {
+pub fn start_tui() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -33,12 +35,11 @@ pub async fn start_tui(client: NostrClient, login_date: Timestamp) -> std::resul
     let mut terminal = Terminal::new(backend)?;
 
     // Get new posts
-    let mut new_posts = client
-        .fetch_notes_since(login_date).await?;
-    new_posts.sort_by_key(|post| std::cmp::Reverse(post.time));
+    let mut posts = cache::load_cached_posts();
+    posts.sort_by_key(|post| std::cmp::Reverse(post.time));
     
     // Create our stateful list
-    let mut stateful_list = StatefulList::with_items(new_posts);
+    let mut stateful_list = StatefulList::with_items(posts);
 
     // Run the app
     let res = run_app(&mut terminal, &mut stateful_list);

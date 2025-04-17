@@ -66,7 +66,9 @@ impl NostrClient {
 
         //let following_list = &self.contacts;
         for pub_key in self.contacts.clone() {
-            let filter = Filter::new().author(pub_key).kind(Kind::TextNote)
+            let filter = Filter::new()
+                .author(pub_key)
+                .kind(Kind::TextNote)
                 .since(timestamp);
             let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
             for event in events {
@@ -75,6 +77,7 @@ impl NostrClient {
                         user: event.pubkey.to_string(),
                         time: event.created_at.as_u64(),
                         content: event.content.to_string(),
+                        id: event.id.to_hex(),
                     }
                 );
             }

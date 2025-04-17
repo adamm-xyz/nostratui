@@ -1,9 +1,9 @@
 // src/config.rs
-use serde::{Deserialize, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::{Write,BufReader};
 use std::path::PathBuf;
 use nostr_sdk::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -39,7 +39,7 @@ impl Config {
     pub fn get_last_login(&self) -> Timestamp {
         match self.last_login {
             Some(login_date) => Timestamp::from_secs(login_date),
-            None => Timestamp::from_secs(60*60*24*7) // Default to 7 days ago
+            None => Timestamp::now() - Timestamp::from_secs(60*60*24*7) // Default to 7 days ago
         }
     }
     
