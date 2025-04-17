@@ -4,8 +4,6 @@
 
 nostratui is a minimalist, responsive, and highly efficient terminal client for the [Nostr](https://nostr.com) protocol.
 
----
-
 ## Installation
 
 ### Clone and Build
@@ -14,10 +12,10 @@ nostratui is a minimalist, responsive, and highly efficient terminal client for 
 git clone https://github.com/adamm-xyz/nostratui.git
 cd nostratui
 cargo build
-
----
+```
 
 ## Usage
 
 ```bash
 cargo run
+```
