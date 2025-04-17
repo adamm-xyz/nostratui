@@ -14,8 +14,42 @@ cd nostratui
 cargo build
 ```
 
+### Config
+
+You must create a config.json at:
+```bash
+~/.config/nostratui/config.json
+```
+Then, you can add your private key, the list of relays you use and public keys you follow.
+
+```json5
+{
+    "key":"nsec1...",
+    "relays":[
+        "wss://myrelay.xyz",
+        "wss://nostr.example.net"
+    ],
+    "contacts:[
+        "npub1...",
+        "npub1...",
+        "npub1..."
+    ]
+}
+
+```
+
 ## Usage
 
+### Run
 ```bash
 cargo run
 ```
+
+### Keybindings
+
+| keybind | Description |
+| ------- | ----------- |
+| k | navigate up|
+| j | navigate down|
+| q | quit |
+
