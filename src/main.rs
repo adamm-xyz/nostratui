@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::process::Command;
+use std::path::PathBuf;
 
 use nostr_sdk::prelude::*;
 
@@ -17,10 +18,10 @@ async fn main() -> Result<()> {
     let flags = Flags::from_args();
 
     // Load config
-    let (mut config, config_path) = Config::load()?;
+    let (config, config_path) = Config::load()?;
 
     // Initialize client and connect relays
-    let mut client = NostrClient::new(config.key.clone());
+    let client = NostrClient::new(config.key.clone());
     client.connect_relays(config.relays.clone()).await?;
 
     match true {
@@ -32,32 +33,41 @@ async fn main() -> Result<()> {
             }
         },
         _ if flags.fetch() => {
-            // Get contacts
-            if config.contacts.is_empty() {
-                config.contacts = client.fetch_contacts()
-                    .await
-                    .into_iter()
-                    .map(|pk| pk.to_bech32().unwrap())
-                    .collect();
-            }
-            client.set_contacts(config.contacts.clone()).await?;
-
-            // Get last login time
-            let last_login = config.get_last_login();
-
-            // Get posts to read, add to cache
-            let new_posts = client.fetch_notes_since(last_login).await?;
-            cache::save_posts_to_cache(new_posts);
-
-            // Save new config
-            config.update_last_login();
-            config.save(&config_path)?;
-        } 
+            get_feed(client,config,config_path).await?
+        },
         _ => {
+            if config.last_login.is_none() {
+                get_feed(client,config,config_path).await?;
+            }
 
-            app::start_tui();
+            app::start_tui().expect("UI crashed")
         }
     }
+    Ok(())
+}
+
+async fn get_feed(mut client: NostrClient, mut config: Config, config_path: PathBuf) -> Result<()> {
+    // Get contacts
+    if config.contacts.is_empty() {
+        config.contacts = client.fetch_contacts()
+            .await
+            .into_iter()
+            .map(|pk| pk.to_bech32().unwrap())
+            .collect();
+    }
+    client.set_contacts(config.contacts.clone()).await?;
+
+
+    // Get last login time
+    let last_login = config.get_last_login();
+
+    // Get posts to read, add to cache
+    let new_posts = client.fetch_notes_since(last_login).await?;
+    cache::save_posts_to_cache(new_posts);
+
+    // Save new config
+    config.update_last_login();
+    config.save(&config_path)?;
     Ok(())
 }
 

@@ -8,7 +8,7 @@ use ratatui::{
     style::{Style, Color, Modifier},
     Terminal, Frame,
     text::Line,
-    prelude::{Span,CrosstermBackend},
+    prelude::{Span,CrosstermBackend, Text},
 };
 use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -115,18 +115,18 @@ fn ui<B: ratatui::backend::Backend>(
             ]);
             
             // Create the content as a separate line with proper wrapping
-            let content = Line::from(vec![
-                Span::raw(&post.content)
-            ]);
+            let content = Text::raw(&post.content);
             
             // Combine them into a multi-line item with spacing
-            ListItem::new(vec![
+            let mut all_lines = vec![
                 header,
                 Line::from(""), // Empty line for spacing
-                content,
-                Line::from(""), // Empty line for spacing between posts
-            ])
-            .style(Style::default())
+            ];
+            all_lines.extend(content.lines);
+            all_lines.push(Line::from(""));
+
+            ListItem::new(all_lines)
+                .style(Style::default())
         })
         .collect();
 
