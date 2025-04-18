@@ -23,36 +23,40 @@ async fn main() -> Result<()> {
     let mut client = NostrClient::new(config.key.clone());
     client.connect_relays(config.relays.clone()).await?;
 
-    if flags.post() {
-        //client post
-        match edit_string() {
-            Ok(note) => client.post_note(note).await?,
-            Err(e) => eprintln!("Error creating post: {}", e),
+    match true {
+        _ if flags.post() => {
+            //client post
+            match edit_string() {
+                Ok(note) => client.post_note(note).await?,
+                Err(e) => eprintln!("Error creating post: {}", e),
+            }
+        },
+        _ if flags.fetch() => {
+            // Get contacts
+            if config.contacts.is_empty() {
+                config.contacts = client.fetch_contacts()
+                    .await
+                    .into_iter()
+                    .map(|pk| pk.to_bech32().unwrap())
+                    .collect();
+            }
+            client.set_contacts(config.contacts.clone()).await?;
+
+            // Get last login time
+            let last_login = config.get_last_login();
+
+            // Get posts to read, add to cache
+            let new_posts = client.fetch_notes_since(last_login).await?;
+            cache::save_posts_to_cache(new_posts);
+
+            // Save new config
+            config.update_last_login();
+            config.save(&config_path)?;
+        } 
+        _ => {
+
+            app::start_tui();
         }
-    } else {
-        // Get last login time
-        let last_login = config.get_last_login();
-        println!("{:?}",last_login.clone().as_u64());
-
-        // Get contacts
-        if config.contacts.is_empty() {
-            config.contacts = client.fetch_contacts()
-                .await
-                .into_iter()
-                .map(|pk| pk.to_bech32().unwrap())
-                .collect();
-        }
-        client.set_contacts(config.contacts.clone()).await?;
-
-        // Get posts to read, add to cache
-        let new_posts = client.fetch_notes_since(last_login).await?;
-        cache::save_posts_to_cache(new_posts);
-
-        // Save new config
-        config.update_last_login();
-        config.save(&config_path)?;
-
-        app::start_tui();
     }
     Ok(())
 }

@@ -40,7 +40,7 @@ impl Flags {
         matches!(self.command, Some(Command::Fetch))
     }
 
-    /// Check if the command is "fetch"
+    /// Check if the command is "stream"
     pub fn stream(&self) -> bool {
         matches!(self.command, Some(Command::Stream))
     }
