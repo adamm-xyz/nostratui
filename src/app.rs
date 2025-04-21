@@ -20,7 +20,8 @@ use crossterm::{
 #[derive(Serialize, Deserialize)]
 pub struct Post {
     pub user: String,
-    pub time: u64,
+    pub timestamp: u64,
+    pub datetime: String,
     pub content: String,
     pub id: String,
 }
@@ -36,7 +37,7 @@ pub fn start_tui() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     // Get new posts
     let mut posts = cache::load_cached_posts();
-    posts.sort_by_key(|post| std::cmp::Reverse(post.time));
+    posts.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
     
     // Create our stateful list
     let mut stateful_list = StatefulList::with_items(posts);
@@ -109,7 +110,7 @@ fn ui<B: ratatui::backend::Backend>(
             // Create the header line with username and timestamp
             let header = Line::from(vec![
                 Span::styled(
-                    format!("{} posted at {}", post.user, post.time),
+                    format!("{} posted at {}", post.user, post.datetime),
                     Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                 )
             ]);

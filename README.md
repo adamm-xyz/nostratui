@@ -29,7 +29,7 @@ Then, you can add your private key, the list of relays you use and public keys y
         "wss://myrelay.xyz",
         "wss://nostr.example.net"
     ],
-    "contacts:[
+    "contacts":[
         [
             "npub1...",
             "matthew",

@@ -11,8 +11,6 @@ use nostratui::app;
 use nostratui::config::Config;
 use nostratui::cache;
 
-use std::time::Duration;
-
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -3,10 +3,12 @@ use std::time::Duration;
 
 use crate::app::Post;
 
+use chrono::{DateTime, TimeZone, Local, Utc};
+
 #[derive(Clone)]
 pub struct NostrClient {
     //secret key
-    pub client: Client,
+    client: Client,
     key: Keys,
     contacts: Vec<Contact>,
 }
@@ -113,16 +115,22 @@ impl NostrClient {
         //let following_list = &self.contacts;
         for contact in self.contacts.clone() {
             let pub_key = contact.key;
+            let user = contact.name;
             let filter = Filter::new()
                 .author(pub_key)
                 .kind(Kind::TextNote)
                 .since(timestamp);
             let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
             for event in events {
+                let utc_time = Utc.timestamp_opt(event.created_at.as_u64() as i64,0).unwrap();
+                let local_time: DateTime<Local> = DateTime::from(utc_time);
+                let datetime = local_time.format("%H:%M %h-%d-%Y").to_string();
+
                 new_posts.push(
                     Post {
-                        user: event.pubkey.to_string(),
-                        time: event.created_at.as_u64(),
+                        user: user.clone(),
+                        timestamp: event.created_at.as_u64(),
+                        datetime: datetime,
                         content: event.content.to_string(),
                         id: event.id.to_hex(),
                     }
