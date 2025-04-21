@@ -4,7 +4,8 @@ use clap::{ArgAction, Parser, ValueEnum};
 pub enum Command {
     Post,
     Fetch,
-    Stream
+    Stream,
+    Contacts
 }
 
 #[allow(
@@ -43,5 +44,10 @@ impl Flags {
     /// Check if the command is "stream"
     pub fn stream(&self) -> bool {
         matches!(self.command, Some(Command::Stream))
+    }
+
+    /// Check if the command is "contacts"
+    pub fn contacts(&self) -> bool {
+        matches!(self.command, Some(Command::Contacts))
     }
 }

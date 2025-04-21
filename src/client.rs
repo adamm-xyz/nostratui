@@ -6,9 +6,22 @@ use crate::app::Post;
 #[derive(Clone)]
 pub struct NostrClient {
     //secret key
-    client: Client,
+    pub client: Client,
     key: Keys,
-    contacts: Vec<PublicKey>,
+    contacts: Vec<Contact>,
+}
+
+
+#[derive(Clone)]
+pub struct Contact {
+    key: PublicKey,
+    name: String,
+}
+
+impl Contact {
+    pub fn to_string_tuple(&self) -> (String,String) {
+        (self.key.to_bech32().unwrap(),self.name.clone())
+    }
 }
 
 impl NostrClient {
@@ -20,6 +33,10 @@ impl NostrClient {
         }
     }
 
+    pub fn my_key(&self) -> PublicKey {
+        self.key.public_key()
+    }
+
     pub async fn connect_relays(&self, relays: Vec<String>) -> Result<()> {
         for relay in relays {
             self.client.add_relay(relay).await?;
@@ -29,32 +46,61 @@ impl NostrClient {
     }
 
     //This will get who the user is following
-    pub async fn fetch_contacts(&self) -> Vec<PublicKey> {
+    pub async fn fetch_contacts(&self) -> Vec<Contact> {
         let my_pub_key = self.key.public_key();
         let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
         let events = self.client.fetch_events(filter, Duration::from_secs(10)).await;
-        let mut following_list = vec![];
+        let mut contacts = vec![];
         if let Some(event) = events.expect("reason").first() {
             let tags = &event.tags;
             
             for tag in tags.iter() {
                 if let Some(following) = tag.content() {
                     let following_pk = PublicKey::from_hex(following).unwrap();
-                    following_list.push(following_pk);
+                    let metadata_filter = Filter::new().author(following_pk).kind(Kind::Metadata);
+                    let metadata_events = self.client.fetch_events(metadata_filter, Duration::from_secs(10)).await;
+                    if let Some(metadata) = metadata_events.expect("reason").first() {
+                        let data = &metadata.content;
+                        let v: Value = serde_json::from_str(data).unwrap();
+                        // Extract the "name" value
+                        if let Some(name) = v.get("name") {
+                            if let Some(name_str) = name.as_str() {
+                                contacts.push(
+                                    Contact {
+                                        key: following_pk,
+                                        name: name_str.to_string()
+                                    }
+                                )
+                            }
+                       }
+                   } else {
+                       println!("No metadata found for {}", following_pk);
+                       contacts.push(
+                            Contact {
+                                key: following_pk,
+                                name: following_pk.to_bech32().unwrap()
+                            }
+                       )
+                   }
                 }
             }
         }
-        following_list
+        contacts
     }
 
-    pub async fn set_contacts(&mut self, contacts: Vec<String>) -> Result<()> {
+    pub async fn set_contacts(&mut self, contacts: Vec<(String,String)>) -> Result<()> {
         if contacts.is_empty() {
             self.contacts = self.fetch_contacts().await;
-        }
-        else {
+        } else {
             let mut contact_list = vec![];
             for contact in contacts {
-                contact_list.push(PublicKey::parse(&contact).unwrap());
+                let (contact_key,contact_name) = contact;
+                contact_list.push(
+                    Contact {
+                        key: PublicKey::parse(&contact_key).unwrap(),
+                        name: contact_name
+                    }
+                )
             }
             self.contacts = contact_list;
         }
@@ -65,7 +111,8 @@ impl NostrClient {
         let mut new_posts: Vec<Post> = vec![];
 
         //let following_list = &self.contacts;
-        for pub_key in self.contacts.clone() {
+        for contact in self.contacts.clone() {
+            let pub_key = contact.key;
             let filter = Filter::new()
                 .author(pub_key)
                 .kind(Kind::TextNote)

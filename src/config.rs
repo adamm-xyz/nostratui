@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     pub key: String,
     pub relays: Vec<String>,
-    pub contacts: Vec<String>,
+    pub contacts: Vec<(String,String)>,
     pub last_login: Option<u64>,
 }
 

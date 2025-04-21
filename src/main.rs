@@ -11,6 +11,8 @@ use nostratui::app;
 use nostratui::config::Config;
 use nostratui::cache;
 
+use std::time::Duration;
+
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -48,14 +50,16 @@ async fn main() -> Result<()> {
 
 async fn get_feed(mut client: NostrClient, mut config: Config, config_path: PathBuf) -> Result<()> {
     // Get contacts
+    let mut contact_list = vec![];
     if config.contacts.is_empty() {
-        config.contacts = client.fetch_contacts()
-            .await
-            .into_iter()
-            .map(|pk| pk.to_bech32().unwrap())
-            .collect();
+        println!("contacts empty!");
+        let fetched_contacts = client.fetch_contacts().await;
+        for contact in fetched_contacts {
+            contact_list.push(contact.to_string_tuple());
+        }
     }
-    client.set_contacts(config.contacts.clone()).await?;
+    config.contacts = contact_list.clone();
+    client.set_contacts(contact_list).await?;
 
 
     // Get last login time
