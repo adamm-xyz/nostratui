@@ -30,9 +30,18 @@ Then, you can add your private key, the list of relays you use and public keys y
         "wss://nostr.example.net"
     ],
     "contacts:[
-        "npub1...",
-        "npub1...",
-        "npub1..."
+        [
+            "npub1...",
+            "matthew",
+        ],
+        [
+            "npub1...",
+            "mark",
+        ],
+        [
+            "npub1...",
+            "luke",
+        ],
     ]
 }
 
