@@ -17,6 +17,12 @@ use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
 };
 
+use std::sync::Arc;
+
+
+use crate::client::NostrClient;
+use crate::config::Config;
+
 #[derive(Serialize, Deserialize)]
 pub struct Post {
     pub user: String,
@@ -27,7 +33,7 @@ pub struct Post {
 }
 
 // Handle TUI setup and teardown
-pub fn start_tui() -> std::result::Result<(), Box<dyn std::error::Error>> {
+pub async fn start_tui(client: NostrClient, config: Config) -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -42,8 +48,10 @@ pub fn start_tui() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // Create our stateful list
     let mut stateful_list = StatefulList::with_items(posts);
 
+    let arc_client = Arc::new(client);
+
     // Run the app
-    let res = run_app(&mut terminal, &mut stateful_list);
+    let res = run_app(&mut terminal, &mut stateful_list, Arc::clone(&arc_client), config).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -61,12 +69,14 @@ pub fn start_tui() -> std::result::Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn run_app<B: ratatui::backend::Backend>(
+pub async fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    stateful_list: &mut StatefulList<Post>
+    stateful_list: &mut StatefulList<Post>,
+    client: Arc<NostrClient>,
+    config: Config,
 ) -> io::Result<()> {
     loop {
-        terminal.draw(|f| ui(f, stateful_list))?;
+        terminal.draw(|f| ui(f, stateful_list, String::from("Feed")))?;
 
         if let Event::Key(key) = event::read()? {
             match key.code {
@@ -74,6 +84,17 @@ pub fn run_app<B: ratatui::backend::Backend>(
                 KeyCode::Esc => return Ok(()),
                 KeyCode::Down | KeyCode::Char('j') => stateful_list.next(),
                 KeyCode::Up | KeyCode::Char('k') => stateful_list.previous(),
+                KeyCode::Char('r') => {
+                    let last_login = config.get_last_login();
+                    terminal.draw(|f| ui(f, stateful_list, String::from("Refreshing...")))?;
+                    match client.fetch_notes_since(last_login).await {
+                        Err(e) => eprintln!("Error fetching notes: {:?}",e),
+                        Ok(new_posts) => {
+                            //cache::save_posts_to_cache(new_posts);
+                            stateful_list.add_items(new_posts);
+                        }
+                    }
+                },
                 /*
                 KeyCode::Char('n') => {
                     let client_clone = client.clone();
@@ -95,6 +116,7 @@ pub fn run_app<B: ratatui::backend::Backend>(
 fn ui<B: ratatui::backend::Backend>(
     f: &mut Frame<B>,
     stateful_list: &mut StatefulList<Post>,
+    status: String,
 ) {
     // Create the layout
     let chunks = Layout::default()
@@ -133,7 +155,7 @@ fn ui<B: ratatui::backend::Backend>(
 
     // Create a List from the items and highlight the currently selected one
     let list = List::new(items)
-        .block(Block::default().title("Feed").borders(Borders::ALL))
+        .block(Block::default().title(status).borders(Borders::ALL))
         .highlight_style(
             Style::default()
                 .bg(Color::Gray)
@@ -161,6 +183,10 @@ impl<T> StatefulList<T> {
             state,
             items,
         }
+    }
+
+    pub fn add_items(&mut self, new_items: Vec<T>) {
+        self.items.extend(new_items);
     }
 
     fn next(&mut self) {

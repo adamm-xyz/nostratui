@@ -35,6 +35,14 @@ impl NostrClient {
         }
     }
 
+    pub fn print(&self) -> Result<()> {
+        println!(
+            "Key: {}\n Num of contacts: {}\n",
+            self.key.public_key().to_bech32().unwrap(),
+            self.contacts.len());
+            Ok(())
+    }
+
     pub fn my_key(&self) -> PublicKey {
         self.key.public_key()
     }

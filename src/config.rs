@@ -1,7 +1,6 @@
 // src/config.rs
 use std::fs::{File, OpenOptions};
 use std::io::{Write,BufReader};
-use std::path::PathBuf;
 use nostr_sdk::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +13,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<(Self, PathBuf)> {
+    pub fn load() -> Result<Self> {
         let config_path = dirs::home_dir()
             .expect("Could not find home directory")
             .join(".config/nostratui/config.json");
@@ -23,15 +22,18 @@ impl Config {
         let reader = BufReader::new(file);
         let config: Config = serde_json::from_reader(reader)?;
         
-        Ok((config, config_path))
+        Ok(config)
     }
     
-    pub fn save(&self, path: &PathBuf) -> Result<()> {
+    pub fn save(&self) -> Result<()> {
+        let config_path = dirs::home_dir()
+            .expect("Could not find home directory")
+            .join(".config/nostratui/config.json");
         let json = serde_json::to_string_pretty(&self)?;
         let mut file = OpenOptions::new()
             .write(true)
             .truncate(true)
-            .open(path)?;
+            .open(&config_path)?;
         file.write_all(json.as_bytes())?;
         Ok(())
     }

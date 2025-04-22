@@ -1,7 +1,6 @@
 use std::env;
 use std::fs;
 use std::process::Command;
-use std::path::PathBuf;
 
 use nostr_sdk::prelude::*;
 
@@ -18,10 +17,10 @@ async fn main() -> Result<()> {
     let flags = Flags::from_args();
 
     // Load config
-    let (config, config_path) = Config::load()?;
+    let mut config = Config::load()?;
 
     // Initialize client and connect relays
-    let client = NostrClient::new(config.key.clone());
+    let mut client = NostrClient::new(config.key.clone());
     client.connect_relays(config.relays.clone()).await?;
 
     match true {
@@ -33,20 +32,22 @@ async fn main() -> Result<()> {
             }
         },
         _ if flags.fetch() => {
-            get_feed(client,config,config_path).await?
+            get_feed(&mut client,&mut config).await?
         },
         _ => {
             if config.last_login.is_none() {
-                get_feed(client,config,config_path).await?;
+                get_feed(&mut client,&mut config).await?;
             }
 
-            app::start_tui().expect("UI crashed")
+            client.set_contacts(config.contacts.clone()).await?;
+
+            app::start_tui(client, config).await.expect("UI crashed")
         }
     }
     Ok(())
 }
 
-async fn get_feed(mut client: NostrClient, mut config: Config, config_path: PathBuf) -> Result<()> {
+async fn get_feed(client: &mut NostrClient, config: &mut Config) -> Result<()> {
     // Get contacts
     let mut contact_list = vec![];
     if config.contacts.is_empty() {
@@ -69,7 +70,7 @@ async fn get_feed(mut client: NostrClient, mut config: Config, config_path: Path
 
     // Save new config
     config.update_last_login();
-    config.save(&config_path)?;
+    config.save()?;
     Ok(())
 }
 
