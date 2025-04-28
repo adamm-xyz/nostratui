@@ -23,7 +23,7 @@ use std::sync::Arc;
 use crate::client::NostrClient;
 use crate::config::Config;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Post {
     pub user: String,
     pub timestamp: u64,
@@ -90,8 +90,9 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                     match client.fetch_notes_since(last_login).await {
                         Err(e) => eprintln!("Error fetching notes: {:?}",e),
                         Ok(new_posts) => {
-                            //cache::save_posts_to_cache(new_posts);
+                            cache::save_posts_to_cache(new_posts.clone());
                             stateful_list.add_items(new_posts);
+                            stateful_list.items.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
                         }
                     }
                 },
@@ -188,6 +189,15 @@ impl<T> StatefulList<T> {
     pub fn add_items(&mut self, new_items: Vec<T>) {
         self.items.extend(new_items);
     }
+
+    pub fn sort_by<F, K>(&mut self, f: F)
+        where
+            F: FnMut(&T) -> K,
+            K: Ord,
+    {
+        self.items.sort_by_key(f);
+    }
+
 
     fn next(&mut self) {
         let i = match self.state.selected() {
