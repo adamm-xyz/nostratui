@@ -27,12 +27,13 @@ impl Contact {
 }
 
 impl NostrClient {
-    pub fn new(key_str: String) -> Self {
-        Self {
-            client: Client::new(Keys::parse(&key_str).unwrap()),
-            key: Keys::parse(&key_str).unwrap(),
+    pub fn new(key_str: String) -> Result<Self> {
+        let key = Keys::parse(&key_str).unwrap();
+        Ok( Self {
+            client: Client::new(key.clone()),
+            key,
             contacts: vec![],
-        }
+        })
     }
 
     pub fn print(&self) -> Result<()> {

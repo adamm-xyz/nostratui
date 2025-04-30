@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     let mut config = Config::load()?;
 
     // Initialize client and connect relays
-    let mut client = NostrClient::new(config.key.clone());
+    let mut client = NostrClient::new(config.key.clone()).unwrap();
     client.connect_relays(config.relays.clone()).await?;
 
     match true {
