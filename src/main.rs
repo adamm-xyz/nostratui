@@ -21,7 +21,12 @@ async fn main() -> Result<()> {
 
     // Initialize client and connect relays
     let mut client = NostrClient::new(config.key.clone()).unwrap();
-    client.connect_relays(config.relays.clone()).await?;
+    let client_connected = client.connect_relays(config.relays.clone()).await?;
+    if client_connected {
+        println!("Connected to nostr network");
+    } else {
+        println!("Failed to connect to nostr network");
+    }
 
     match true {
         _ if flags.post() => {
@@ -49,16 +54,7 @@ async fn main() -> Result<()> {
 
 async fn get_feed(client: &mut NostrClient, config: &mut Config) -> Result<()> {
     // Get contacts
-    let mut contact_list = vec![];
-    if config.contacts.is_empty() {
-        println!("contacts empty!");
-        let fetched_contacts = client.fetch_contacts().await;
-        for contact in fetched_contacts {
-            contact_list.push(contact.to_string_tuple());
-        }
-    }
-    config.contacts = contact_list.clone();
-    client.set_contacts(contact_list).await?;
+    client.set_contacts(config.contacts.clone()).await?;
 
 
     // Get last login time

@@ -11,6 +11,7 @@ pub struct NostrClient {
     client: Client,
     key: Keys,
     contacts: Vec<Contact>,
+    relays: Vec<String>
 }
 
 
@@ -33,6 +34,7 @@ impl NostrClient {
             client: Client::new(key.clone()),
             key,
             contacts: vec![],
+            relays: vec![],
         })
     }
 
@@ -48,21 +50,52 @@ impl NostrClient {
         self.key.public_key()
     }
 
-    pub async fn connect_relays(&self, relays: Vec<String>) -> Result<()> {
-        for relay in relays {
-            self.client.add_relay(relay).await?;
+    pub async fn connect_relays(&mut self, relays: Vec<String>) -> Result<bool> {
+        // Add all relays first
+        for relay in &relays {
+            self.client.add_relay(relay.clone()).await?;
+            self.relays.push(relay.clone());
         }
+        
+        // Connect to network
         self.client.connect().await;
-        Ok(())
+        // Wait a moment for connections to establish
+        tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
+        
+        // Get relay connections and check their status
+        let relay_connections = self.client.relays();
+        let connected = relay_connections.await.iter().any(|(_, relay)| {
+            relay.status() == RelayStatus::Connected
+        });
+        
+        Ok(connected)
+        
+    }
+
+    pub async fn is_connected(&mut self) -> Result<bool> {
+        return self.connect_relays(self.relays.clone()).await;
     }
 
     //This will get who the user is following
-    pub async fn fetch_contacts(&self) -> Vec<Contact> {
+    pub async fn fetch_contacts(&mut self) -> Vec<Contact> {
         let my_pub_key = self.key.public_key();
+        println!("my pubkey {}",my_pub_key);
         let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
-        let events = self.client.fetch_events(filter, Duration::from_secs(10)).await;
+        let events = match self.client.fetch_events(filter, Duration::from_secs(30)).await {
+            Ok(evts) => evts,
+            Err(e) => {
+                println!("Error fetching ContactList event: {:?}", e);
+                return vec![];
+            }
+        };
+
+        if events.is_empty() {
+            println!("No ContactList events found for your public key");
+            return vec![];
+        }
         let mut contacts = vec![];
-        if let Some(event) = events.expect("reason").first() {
+        if let Some(event) = events.first() {
+            println!("received contact list");
             let tags = &event.tags;
             
             for tag in tags.iter() {
@@ -76,6 +109,7 @@ impl NostrClient {
                         // Extract the "name" value
                         if let Some(name) = v.get("name") {
                             if let Some(name_str) = name.as_str() {
+                                println!("{}",name_str);
                                 contacts.push(
                                     Contact {
                                         key: following_pk,
@@ -118,36 +152,61 @@ impl NostrClient {
         Ok(())
     }
 
-    pub async fn fetch_notes_since(&self,timestamp: Timestamp) -> Result<Vec<Post>> {
+    pub async fn fetch_notes_since(&self, timestamp: Timestamp) -> Result<Vec<Post>> {
         let mut new_posts: Vec<Post> = vec![];
-
-        //let following_list = &self.contacts;
+        let mut tasks = Vec::new();
+        
         for contact in self.contacts.clone() {
+            let client_clone = self.client.clone();
             let pub_key = contact.key;
-            let user = contact.name;
-            let filter = Filter::new()
-                .author(pub_key)
-                .kind(Kind::TextNote)
-                .since(timestamp);
-            let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
-            for event in events {
-                let utc_time = Utc.timestamp_opt(event.created_at.as_u64() as i64,0).unwrap();
-                let local_time: DateTime<Local> = DateTime::from(utc_time);
-                let datetime = local_time.format("%H:%M %h-%d-%Y").to_string();
-
-                new_posts.push(
-                    Post {
-                        user: user.clone(),
-                        timestamp: event.created_at.as_u64(),
-                        datetime: datetime,
-                        content: event.content.to_string(),
-                        id: event.id.to_hex(),
+            let user = contact.name.clone();
+            
+            tasks.push(tokio::spawn(async move {
+                let filter = Filter::new()
+                    .author(pub_key)
+                    .kind(Kind::TextNote)
+                    .since(timestamp);
+                    
+                let result = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    client_clone.fetch_events(filter, Duration::from_secs(30))
+                ).await;
+                
+                match result {
+                    Ok(Ok(events)) => {
+                        let mut contact_posts = Vec::new();
+                        for event in events {
+                            let utc_time = Utc.timestamp_opt(event.created_at.as_u64() as i64, 0).unwrap();
+                            let local_time: DateTime<Local> = DateTime::from(utc_time);
+                            let datetime = local_time.format("%H:%M %h-%d-%Y").to_string();
+                            
+                            contact_posts.push(Post {
+                                user: user.clone(),
+                                timestamp: event.created_at.as_u64(),
+                                datetime,
+                                content: event.content.to_string(),
+                                id: event.id.to_hex(),
+                            });
+                        }
+                        Ok(contact_posts)
                     }
-                );
+                    Ok(Err(e)) => Err(anyhow::anyhow!("Failed to fetch events: {}", e)),
+                    Err(_) => Err(anyhow::anyhow!("Timeout fetching events")),
+                }
+            }));
+        }
+        
+        for task in futures::future::join_all(tasks).await {
+            match task {
+                Ok(Ok(posts)) => new_posts.extend(posts),
+                Ok(Err(e)) => log::warn!("Error fetching posts: {}", e),
+                Err(e) => log::warn!("Task error: {}", e),
             }
         }
+        
         Ok(new_posts)
     }
+
 
     pub async fn post_note(&self, note: String) -> Result<()> {
         let builder = EventBuilder::text_note(note).pow(20);
