@@ -38,6 +38,10 @@ impl NostrClient {
         })
     }
 
+    pub fn get_contacts(&self) -> Vec<Contact> {
+        return self.contacts.clone()
+    }
+
     pub fn print(&self) -> Result<()> {
         println!(
             "Key: {}\n Num of contacts: {}\n",

@@ -54,7 +54,14 @@ async fn main() -> Result<()> {
 
 async fn get_feed(client: &mut NostrClient, config: &mut Config) -> Result<()> {
     // Get contacts
+    let conf_contacts = config.contacts.clone();
     client.set_contacts(config.contacts.clone()).await?;
+    if conf_contacts.is_empty() {
+        config.contacts = client.get_contacts()
+            .into_iter()
+            .map(|c| c.to_string_tuple())
+            .collect();
+    }
 
 
     // Get last login time
