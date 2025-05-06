@@ -1,9 +1,13 @@
 use nostr_sdk::prelude::*;
 use std::time::Duration;
+use anyhow::{Context, Result};
+use chrono::{DateTime, TimeZone, Local, Utc};
+use tokio::time::timeout;
+use futures::future;
 
+use crate::error::NostratuiError;
 use crate::app::Post;
 
-use chrono::{DateTime, TimeZone, Local, Utc};
 
 #[derive(Clone)]
 pub struct NostrClient {
@@ -29,7 +33,9 @@ impl Contact {
 
 impl NostrClient {
     pub fn new(key_str: String) -> Result<Self> {
-        let key = Keys::parse(&key_str).unwrap();
+        let key = Keys::parse(&key_str)
+            .map_err(|e| NostratuiError::KeyParsing(e.to_string()))?;
+
         Ok( Self {
             client: Client::new(key.clone()),
             key,
@@ -54,92 +60,105 @@ impl NostrClient {
         self.key.public_key()
     }
 
-    pub async fn connect_relays(&mut self, relays: Vec<String>) -> Result<bool> {
-        // Add all relays first
-        for relay in &relays {
-            self.client.add_relay(relay.clone()).await?;
-            self.relays.push(relay.clone());
-        }
-        
-        // Connect to network
-        self.client.connect().await;
-        // Wait a moment for connections to establish
-        tokio::time::sleep(tokio::time::Duration::from_millis(10000)).await;
-        
-        // Get relay connections and check their status
-        let relay_connections = self.client.relays();
-        let connected = relay_connections.await.iter().any(|(_, relay)| {
-            relay.status() == RelayStatus::Connected
-        });
-        
-        Ok(connected)
-        
+    pub fn set_relays(&mut self, relays: Vec<String>) {
+        self.relays = relays;
     }
 
-    pub async fn is_connected(&mut self) -> Result<bool> {
-        return self.connect_relays(self.relays.clone()).await;
+    pub fn get_relays(&self) -> Vec<String> {
+        return self.relays.clone()
+    }
+
+    pub async fn connect_relays(&mut self) -> Result<()> {
+        let mut connection_results = Vec::new();
+
+        for relay in &self.relays {
+            match self.client.add_relay(relay.clone()).await {
+                Ok(_) => connection_results.push(Ok(())),
+                Err(e) => connection_results.push(Err(NostratuiError::Network(
+                            format!("Failed to add relay {}: {}", relay, e)
+                ))),
+            }
+        }
+
+        self.client.connect().await;
+
+        if connection_results.iter().any(Result::is_ok) {
+            Ok(())
+        } else {
+            Err(NostratuiError::Network("Failed to connect to any relays".to_string()).into())
+        }
+        
     }
 
     //This will get who the user is following
-    pub async fn fetch_contacts(&mut self) -> Vec<Contact> {
+    pub async fn fetch_contacts(&mut self) -> Result<Vec<Contact>> {
         let my_pub_key = self.key.public_key();
-        println!("my pubkey {}",my_pub_key);
         let filter = Filter::new().author(my_pub_key).kind(Kind::ContactList);
-        let events = match self.client.fetch_events(filter, Duration::from_secs(30)).await {
-            Ok(evts) => evts,
-            Err(e) => {
-                println!("Error fetching ContactList event: {:?}", e);
-                return vec![];
-            }
-        };
-
-        if events.is_empty() {
-            println!("No ContactList events found for your public key");
-            return vec![];
-        }
+        
+        // Use timeout for fetching events
+        let my_contacts_note = timeout(
+            Duration::from_secs(15),
+            self.client.fetch_events(filter, Duration::from_secs(10))
+        )
+        .await
+        .context("Timeout fetching contact list")?
+        .context("Failed to fetch contact list")?;
+        
         let mut contacts = vec![];
-        if let Some(event) = events.first() {
-            println!("received contact list");
-            let tags = &event.tags;
+        
+        if let Some(fetched_contact_list) = my_contacts_note.first() {
+            let tags = &fetched_contact_list.tags;
+            
             
             for tag in tags.iter() {
                 if let Some(following) = tag.content() {
-                    let following_pk = PublicKey::from_hex(following).unwrap();
-                    let metadata_filter = Filter::new().author(following_pk).kind(Kind::Metadata);
-                    let metadata_events = self.client.fetch_events(metadata_filter, Duration::from_secs(10)).await;
-                    if let Some(metadata) = metadata_events.expect("reason").first() {
-                        let data = &metadata.content;
-                        let v: Value = serde_json::from_str(data).unwrap();
-                        // Extract the "name" value
-                        if let Some(name) = v.get("name") {
-                            if let Some(name_str) = name.as_str() {
-                                println!("{}",name_str);
+                    let following_pk = match PublicKey::from_hex(following) {
+                        Ok(pk) => pk,
+                        Err(_) => continue,
+                    };
+                    
+                    let metadata_filter = Filter::new()
+                        .author(following_pk)
+                        .kind(Kind::Metadata);
+                            
+                    let metadata_result = self.client.fetch_events(metadata_filter, Duration::from_secs(10)).await;
+                        
+                    match metadata_result {
+                        Ok(fetched_contact_metadata) => {
+                            if let Some(metadata) = fetched_contact_metadata.first() {
+                                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&metadata.content) {
+                                    if let Some(name) = value.get("name").and_then(|n| n.as_str()) {
+                                        println!("found metadata for name!");
+                                        contacts.push(
+                                            Contact {
+                                                key: following_pk,
+                                                name: name.to_string(),
+                                            });
+                                    }                                 }
+                            } else {
+                                println!("Needed fallback");
+                                // Fallback to using pubkey as name
                                 contacts.push(
                                     Contact {
                                         key: following_pk,
-                                        name: name_str.to_string()
-                                    }
-                                )
+                                        name: following_pk.to_bech32().unwrap_or_default(),
+                                    });
                             }
-                       }
-                   } else {
-                       println!("No metadata found for {}", following_pk);
-                       contacts.push(
-                            Contact {
-                                key: following_pk,
-                                name: following_pk.to_bech32().unwrap()
-                            }
-                       )
-                   }
+                        },
+                        _ => {}
+
+                    }
                 }
             }
         }
-        contacts
+            
+        
+        Ok(contacts)
     }
 
     pub async fn set_contacts(&mut self, contacts: Vec<(String,String)>) -> Result<()> {
         if contacts.is_empty() {
-            self.contacts = self.fetch_contacts().await;
+            self.contacts = self.fetch_contacts().await?;
         } else {
             let mut contact_list = vec![];
             for contact in contacts {

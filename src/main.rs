@@ -21,12 +21,8 @@ async fn main() -> Result<()> {
 
     // Initialize client and connect relays
     let mut client = NostrClient::new(config.key.clone()).unwrap();
-    let client_connected = client.connect_relays(config.relays.clone()).await?;
-    if client_connected {
-        println!("Connected to nostr network");
-    } else {
-        println!("Failed to connect to nostr network");
-    }
+    client.set_relays(config.relays.clone());
+    let _client_connected = client.connect_relays().await?;
 
     match true {
         _ if flags.post() => {
