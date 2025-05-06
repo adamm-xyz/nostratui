@@ -1,4 +1,3 @@
-// src/error.rs
 use std::io;
 use thiserror::Error;
 

@@ -1,8 +1,10 @@
-// src/config.rs
 use std::fs::{File, OpenOptions};
 use std::io::{Write,BufReader};
 use nostr_sdk::prelude::*;
 use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
+
+use crate::error::NostratuiError;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -15,26 +17,36 @@ pub struct Config {
 impl Config {
     pub fn load() -> Result<Self> {
         let config_path = dirs::home_dir()
-            .expect("Could not find home directory")
+            .ok_or_else(|| NostratuiError::Config("Could not find home directory".to_string()))?
             .join(".config/nostratui/config.json");
         
-        let file = File::open(&config_path)?;
+        let file = File::open(&config_path)
+            .with_context(|| format!("Failed to open config file at {:?}", config_path))?;
+
         let reader = BufReader::new(file);
-        let config: Config = serde_json::from_reader(reader)?;
+        let config: Config = serde_json::from_reader(reader)
+            .context("Failed to prase config JSON")?;
         
         Ok(config)
     }
     
     pub fn save(&self) -> Result<()> {
         let config_path = dirs::home_dir()
-            .expect("Could not find home directory")
+            .ok_or_else(|| NostratuiError::Config("Could not find home directory".to_string()))?
             .join(".config/nostratui/config.json");
-        let json = serde_json::to_string_pretty(&self)?;
+
+        let json = serde_json::to_string_pretty(&self)
+            .context("Failed to serialize config to JSON")?;
+
         let mut file = OpenOptions::new()
             .write(true)
             .truncate(true)
-            .open(&config_path)?;
-        file.write_all(json.as_bytes())?;
+            .open(&config_path)
+            .with_context(|| format!("Failed to open conf file for writing at {:?}",config_path))?;
+
+        file.write_all(json.as_bytes())
+            .context("Failed to write config data")?;
+
         Ok(())
     }
     
