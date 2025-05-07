@@ -6,7 +6,7 @@ use tokio::time::timeout;
 use futures::future;
 
 use crate::error::NostratuiError;
-use crate::app::Post;
+use crate::models::post::Post;
 
 
 #[derive(Clone)]

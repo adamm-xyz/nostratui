@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::path::{PathBuf, Path};
 
-use crate::app::Post;
+use crate::models::post::Post;
 
 pub fn get_cache_file() -> PathBuf {
     // Check the XDG_CACHE_HOME environment variable first
