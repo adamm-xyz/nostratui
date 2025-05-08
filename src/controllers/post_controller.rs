@@ -32,7 +32,7 @@ pub fn create_post_via_editor() -> Result<String> {
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "Editor exited with non-zero status"
-                )
+                ).to_string()
         ).into());
     }
 

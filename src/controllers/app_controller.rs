@@ -8,8 +8,9 @@ use crate::models::{NostrClient, Config, Post};
 use crate::views::{tui, StatefulList};
 use crate::controllers::post_controller;
 use crate::models::cache;
+use crate::error::NostratuiError;
 
-pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Config) -> Result<()> {
+pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Config) -> Result<(),NostratuiError> {
     // Get contacts
     let conf_contacts = config.contacts.clone();
     client.set_contacts(config.contacts.clone()).await?;
@@ -25,7 +26,7 @@ pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Con
 
     // Get posts to read, add to cache
     let new_posts = client.fetch_notes_since(last_login).await?;
-    crate::models::cache::save_posts_to_cache(new_posts);
+    crate::models::cache::save_posts_to_cache(new_posts)?;
 
     // Save new config
     config.update_last_login();
@@ -38,7 +39,8 @@ pub async fn start_app(client: NostrClient, config: Config) -> std::result::Resu
     let mut terminal = tui::setup_terminal()?;
 
     // Get new posts
-    let mut posts = cache::load_cached_posts();
+    let mut posts = cache::load_cached_posts()
+        .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
     posts.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
     
     // Create our stateful list
