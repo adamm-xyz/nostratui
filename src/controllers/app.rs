@@ -3,7 +3,6 @@ use std::env;
 use std::fs;
 use std::process::Command;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
 use nostr_sdk::Timestamp;

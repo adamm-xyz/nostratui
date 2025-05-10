@@ -3,7 +3,6 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use chrono::{DateTime, TimeZone, Local, Utc};
 use tokio::time::timeout;
-use futures::future;
 
 use crate::error::NostratuiError;
 use crate::models::post::Post;

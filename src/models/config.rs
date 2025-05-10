@@ -15,7 +15,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Self> {
+    pub fn load() -> Result<Self,NostratuiError> {
         let config_path = dirs::home_dir()
             .ok_or_else(|| NostratuiError::Config("Could not find home directory".to_string()))?
             .join(".config/nostratui/config.json");
