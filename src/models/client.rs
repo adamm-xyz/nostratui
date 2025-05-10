@@ -67,7 +67,7 @@ impl NostrClient {
         return self.relays.clone()
     }
 
-    pub async fn connect_relays(&mut self) -> Result<()> {
+    pub async fn connect_relays(&mut self) -> Result<(),NostratuiError> {
         let mut connection_results = Vec::new();
 
         for relay in &self.relays {

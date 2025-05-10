@@ -30,7 +30,7 @@ impl Config {
         Ok(config)
     }
     
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<(),NostratuiError> {
         let config_path = dirs::home_dir()
             .ok_or_else(|| NostratuiError::Config("Could not find home directory".to_string()))?
             .join(".config/nostratui/config.json");
