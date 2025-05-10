@@ -1,4 +1,3 @@
-use std::io;
 use std::env;
 use std::fs;
 use std::process::Command;
@@ -68,7 +67,7 @@ pub async fn run_app<B: ratatui::backend::Backend>(
     stateful_list: &mut StatefulList<Post>,
     client: Arc<NostrClient>,
     config: Config,
-) -> io::Result<()> {
+) -> Result<(),NostratuiError> {
     loop {
         terminal.draw(|f| tui::render_ui(f, stateful_list, String::from("Feed")))?;
 
@@ -85,7 +84,7 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                     match fetch_new_posts(&client, last_login).await {
                         Err(e) => eprintln!("Error fetching notes: {:?}", e),
                         Ok(new_posts) => {
-                            cache::save_posts_to_cache(new_posts.clone());
+                            cache::save_posts_to_cache(new_posts.clone())?;
                             stateful_list.add_items(new_posts);
                             stateful_list.items.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
                         }
