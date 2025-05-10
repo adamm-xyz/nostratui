@@ -232,7 +232,7 @@ impl NostrClient {
 
     pub async fn post_note(&self, note: String) -> Result<(),NostratuiError> {
         let builder = EventBuilder::text_note(note).pow(20);
-        self.client.send_event_builder(builder).await;
+        self.client.send_event_builder(builder).await?;
         Ok(())
     }
 

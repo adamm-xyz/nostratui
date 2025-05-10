@@ -52,3 +52,9 @@ impl From<anyhow::Error> for NostratuiError {
         NostratuiError::Anyhow(err.to_string())
     }
 }
+
+impl From<nostr_sdk::client::Error> for NostratuiError {
+    fn from(err: nostr_sdk::client::Error) -> Self {
+        NostratuiError::NostrSdk(err.to_string())
+    }
+}
