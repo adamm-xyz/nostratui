@@ -1,12 +1,15 @@
 use std::io;
+use std::env;
+use std::fs;
+use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use crossterm::event::{self, Event, KeyCode};
 use ratatui::Terminal;
+use nostr_sdk::Timestamp;
 
 use crate::models::{NostrClient, Config, Post};
 use crate::views::{tui, StatefulList};
-use crate::controllers::post_controller;
 use crate::models::cache;
 use crate::error::NostratuiError;
 
@@ -80,7 +83,7 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                     let last_login = config.get_last_login();
                     terminal.draw(|f| tui::render_ui(f, stateful_list, String::from("Refreshing...")))?;
                     
-                    match post_controller::fetch_new_posts(&client, last_login).await {
+                    match fetch_new_posts(&client, last_login).await {
                         Err(e) => eprintln!("Error fetching notes: {:?}", e),
                         Ok(new_posts) => {
                             cache::save_posts_to_cache(new_posts.clone());
@@ -102,3 +105,37 @@ pub async fn run_app<B: ratatui::backend::Backend>(
         }
     }
 }
+
+pub async fn fetch_new_posts(client: &Arc<NostrClient>, last_login: Timestamp) -> Result<Vec<Post>, NostratuiError> {
+    client.fetch_notes_since(last_login).await
+}
+
+pub async fn post_note(client: &NostrClient, content: String) -> Result<(), NostratuiError> {
+    client.post_note(content).await
+}
+
+pub fn create_post_via_editor() -> Result<String,NostratuiError> {
+    let editor = env::var("EDITOR")
+        .unwrap_or_else(|_| "vi".to_string());
+
+    let mut temp_path = env::temp_dir();
+    temp_path.push("note");
+
+    let status = Command::new(editor)
+        .arg(&temp_path)
+        .status()?;
+
+    if !status.success() {
+        return Err(NostratuiError::Io(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Editor exited with non-zero status"
+                ).to_string()
+        ).into());
+    }
+
+    let content = fs::read_to_string(&temp_path)?;
+    let _ = fs::remove_file(&temp_path);
+    Ok(content)
+}
+

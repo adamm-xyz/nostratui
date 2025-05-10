@@ -1,8 +1,7 @@
 use nostratui::{
     cli::Flags,
     models::{NostrClient, Config},
-    controllers::{start_app, init_feed},
-    controllers::post_controller,
+    controllers::{start_app, init_feed, create_post_via_editor, post_note}
 };
 
 #[tokio::main]
@@ -21,8 +20,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match true {
         _ if flags.post() => {
             // Post a new note
-            match post_controller::create_post_via_editor() {
-                Ok(note) => post_controller::post_note(&client, note).await?,
+            match create_post_via_editor() {
+                Ok(note) => post_note(&client, note).await?,
                 Err(e) => eprintln!("Error creating post: {}", e),
             }
         },

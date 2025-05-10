@@ -175,7 +175,7 @@ impl NostrClient {
         Ok(())
     }
 
-    pub async fn fetch_notes_since(&self, timestamp: Timestamp) -> Result<Vec<Post>> {
+    pub async fn fetch_notes_since(&self, timestamp: Timestamp) -> Result<Vec<Post>, NostratuiError> {
         let mut new_posts: Vec<Post> = vec![];
         let mut tasks = Vec::new();
         
@@ -231,9 +231,9 @@ impl NostrClient {
     }
 
 
-    pub async fn post_note(&self, note: String) -> Result<()> {
+    pub async fn post_note(&self, note: String) -> Result<(),NostratuiError> {
         let builder = EventBuilder::text_note(note).pow(20);
-        self.client.send_event_builder(builder).await?;
+        self.client.send_event_builder(builder).await;
         Ok(())
     }
 
