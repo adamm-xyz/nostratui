@@ -61,3 +61,8 @@ pub fn save_posts_to_cache(new_posts: Vec<Post>) -> Result<(), NostratuiError> {
     
     Ok(())
 }
+
+pub fn is_cache_empty() -> Result<bool,NostratuiError> {
+    let cache_files = load_cached_posts()?;
+    Ok(cache_files.is_empty())
+}

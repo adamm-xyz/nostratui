@@ -11,7 +11,7 @@ use crate::views::{tui, StatefulList};
 use crate::models::cache;
 use crate::error::NostratuiError;
 
-pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Config) -> Result<(),NostratuiError> {
+pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Config, fetch_time: Timestamp) -> Result<(),NostratuiError> {
     // Get contacts
     let conf_contacts = config.contacts.clone();
     client.set_contacts(config.contacts.clone()).await?;
@@ -22,11 +22,8 @@ pub async fn init_feed(client: &mut NostrClient, config: &mut crate::models::Con
             .collect();
     }
 
-    // Get last login time
-    let last_login = config.get_last_login();
-
     // Get posts to read, add to cache
-    let new_posts = client.fetch_notes_since(last_login).await?;
+    let new_posts = client.fetch_notes_since(fetch_time).await?;
     crate::models::cache::save_posts_to_cache(new_posts)?;
 
     // Save new config
