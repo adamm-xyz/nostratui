@@ -68,39 +68,64 @@ pub async fn run_app<B: ratatui::backend::Backend>(
     client: Arc<NostrClient>,
     config: Config,
 ) -> Result<(),NostratuiError> {
-    loop {
-        terminal.draw(|f| tui::render_ui(f, stateful_list, String::from("Feed")))?;
+    let mut refresh_in_progress = false;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Post>>(1);
 
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') => return Ok(()),
-                KeyCode::Esc => return Ok(()),
-                KeyCode::Down | KeyCode::Char('j') => stateful_list.next(),
-                KeyCode::Up | KeyCode::Char('k') => stateful_list.previous(),
-                KeyCode::Char('r') => {
-                    let last_login = config.get_last_login();
-                    terminal.draw(|f| tui::render_ui(f, stateful_list, String::from("Refreshing...")))?;
-                    
-                    match fetch_new_posts(&client, last_login).await {
-                        Err(e) => eprintln!("Error fetching notes: {:?}", e),
-                        Ok(new_posts) => {
-                            cache::save_posts_to_cache(new_posts.clone())?;
-                            stateful_list.add_items(new_posts);
-                            stateful_list.items.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
+    loop {
+        let status_message = if refresh_in_progress {
+            String::from("Refreshing...")
+        } else {
+            String::from("Feed")
+        };
+
+        terminal.draw(|f| tui::render_ui(f, stateful_list, status_message ))?;
+
+        if let Ok(new_posts) = rx.try_recv() {
+            cache::save_posts_to_cache(new_posts.clone())?;
+            stateful_list.add_items(new_posts);
+            stateful_list.items.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
+            refresh_in_progress = false;
+        }
+        if event::poll(std::time::Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Esc => return Ok(()),
+                    KeyCode::Down | KeyCode::Char('j') => stateful_list.next(),
+                    KeyCode::Up | KeyCode::Char('k') => stateful_list.previous(),
+                    KeyCode::Char('r') => {
+                        if !refresh_in_progress {
+                            refresh_in_progress = true;
+
+                            let last_login = config.get_last_login();
+                            let task_client = Arc::clone(&client);
+                            let task_tx = tx.clone();
+
+                            tokio::spawn(async move {
+                                match fetch_new_posts(&task_client, last_login).await {
+                                    Ok(new_posts) => {
+                                        let _ = task_tx.send(new_posts).await;
+                                    },
+                                    Err(e) => {
+                                        eprintln!("Error fetching notes: {:?}", e);
+                                    }
+                                }
+                            });
                         }
-                    }
-                },
-                /*
-                KeyCode::Char('n') => {
+                    },
+                    /*
+                       KeyCode::Char('n') => {
                     // Post note functionality can be implemented here using post_controller
-                },
-                KeyCode::Enter => {
+                    },
+                    KeyCode::Enter => {
                     // View post details functionality can be implemented here
+                    }
+                    */
+                    _ => {}
                 }
-                */
-                _ => {}
             }
         }
+
     }
 }
 
