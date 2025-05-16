@@ -52,8 +52,10 @@ pub fn save_posts_to_cache(new_posts: Vec<Post>) -> Result<(), NostratuiError> {
         }
     }
 
+    cached_posts.sort_by_key(|post| std::cmp::Reverse(post.timestamp));
+
     let cache_path = get_cache_file()?;
-    let json = serde_json::to_string(&cached_posts)
+    let json = serde_json::to_string_pretty(&cached_posts)
         .map_err(|e| NostratuiError::Cache(format!("Failed to serialize posts: {}", e)))?;
     
     fs::write(cache_path, json)
