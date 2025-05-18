@@ -57,4 +57,42 @@ impl<T> StatefulList<T> {
         };
         self.state.select(Some(i));
     }
+
+    pub fn first(&mut self) {
+        self.state.select(Some(0));
+    }
+
+    pub fn last(&mut self) {
+        self.state.select(Some(self.items.len()-1));
+    }
+
+    pub fn jump_up(&mut self, offset: i16 ) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                let result = (i as i16) - offset;
+                if result < 0 {
+                    0
+                } else {
+                    result as usize
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn jump_down(&mut self, offset: i16 ) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                let result = (i as i16) + offset;
+                if result > self.items.len().try_into().unwrap() {
+                    self.items.len() - 1
+                } else {
+                    result as usize
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
 }

@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::process::Command;
 use std::sync::Arc;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::Terminal;
 use nostr_sdk::Timestamp;
 
@@ -90,6 +90,10 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Esc => return Ok(()),
                     KeyCode::Down | KeyCode::Char('j') => stateful_list.next(),
                     KeyCode::Up | KeyCode::Char('k') => stateful_list.previous(),
+                    KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => stateful_list.jump_down(10),
+                    KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => stateful_list.jump_up(10),
+                    KeyCode::Char('g') => stateful_list.first(),
+                    KeyCode::Char('G') => stateful_list.last(),
                     KeyCode::Char('r') => {
                         if !refresh_in_progress {
                             refresh_in_progress = true;
