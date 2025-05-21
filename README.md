@@ -62,5 +62,6 @@ cargo run
 | ------- | ----------- |
 | k | navigate up|
 | j | navigate down|
+| r | refresh feed|
 | q | quit |
 
