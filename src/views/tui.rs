@@ -56,7 +56,7 @@ pub fn render_ui<B: ratatui::backend::Backend>(
             // Create the header line with username and timestamp
             let header = Line::from(vec![
                 Span::styled(
-                    format!("{} posted at {}", post.user, post.datetime),
+                    format!("{} - {} posted:", post.datetime, post.user),
                     Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                 )
             ]);
