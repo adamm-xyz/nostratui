@@ -34,16 +34,16 @@ Then, you can add your private key, the list of relays you use and public keys y
     "contacts":[
         [
             "npub1...",
-            "matthew",
+            "matthew"
         ],
         [
             "npub1...",
-            "mark",
+            "mark"
         ],
         [
             "npub1...",
-            "luke",
-        ],
+            "luke"
+        ]
     ]
 }
 
