@@ -2,8 +2,13 @@
 
 **A terminal user interface (TUI) for browsing Nostr posts, written in Rust.**
 
-<a href="https://asciinema.org/a/2iFOjS0jE4ahSNA2quFRIIqIW" target="_blank"><img src="https://asciinema.org/a/2iFOjS0jE4ahSNA2quFRIIqIW.svg" /></a>
 
+<div align="center">
+  <p>
+    <a href="https://github.com/adamm-xyz/nostratui" target="_blank">
+      <img width="100%" src="https://raw.githubusercontent.com/adamm-xyz/nostratui/refs/heads/main/demo.gif" alt="nostratui demo banner"></a>
+  </p>
+</div>
 nostratui is a minimalist, responsive, and highly efficient terminal client for the [Nostr](https://nostr.com) protocol.
 
 ## Installation
