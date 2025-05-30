@@ -9,7 +9,7 @@
       <img width="100%" src="https://raw.githubusercontent.com/adamm-xyz/nostratui/refs/heads/main/demo.gif" alt="nostratui demo banner"></a>
   </p>
 </div>
-nostratui is a minimalist, responsive, and highly efficient terminal client for the [Nostr](https://nostr.com) protocol.
+nostratui is a minimalist, responsive, and highly efficient terminal client for the <a href="https://nostr.com">nostr</a> protocol.
 
 ## Installation
 
