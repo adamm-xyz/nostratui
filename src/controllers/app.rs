@@ -94,7 +94,7 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => stateful_list.jump_up(10),
                     KeyCode::Char('g') => stateful_list.first(),
                     KeyCode::Char('G') => stateful_list.last(),
-                    KeyCode::Char('r') => {
+                    KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         if !refresh_in_progress {
                             refresh_in_progress = true;
 
