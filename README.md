@@ -68,5 +68,6 @@ cargo run
 | k | navigate up|
 | j | navigate down|
 | Ctrl-r | refresh feed|
+| n | create new post|
 | q | quit |
 

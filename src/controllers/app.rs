@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::Terminal;
 use nostr_sdk::Timestamp;
+use std::io;
 
 use crate::models::{NostrClient, Config, Post};
 use crate::views::{tui, StatefulList};
@@ -59,8 +60,8 @@ pub async fn start_app(client: NostrClient, config: Config) -> std::result::Resu
     Ok(())
 }
 
-pub async fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
+pub async fn run_app(
+    terminal: &mut Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>,
     stateful_list: &mut StatefulList<Post>,
     client: Arc<NostrClient>,
     config: Config,
@@ -114,11 +115,27 @@ pub async fn run_app<B: ratatui::backend::Backend>(
                             });
                         }
                     },
-                    /*
-                       KeyCode::Char('n') => {
-                    // Post note functionality can be implemented here using post_controller
+                    KeyCode::Char('n') => {
+                        // Use the helper function to handle terminal restoration and setup
+                        if let Ok(()) = tui::with_restored_terminal(terminal, || {
+                            // Create and post the note
+                            match create_post_via_editor() {
+                                Ok(note) => {
+                                    let client_clone = Arc::clone(&client);
+                                    tokio::spawn(async move {
+                                        if let Err(e) = post_note(&client_clone, note).await {
+                                            eprintln!("Error posting note: {:?}", e);
+                                        }
+                                    });
+                                },
+                                Err(e) => eprintln!("Error creating post: {:?}", e),
+                            }
+                        }) {
+                            // Terminal was successfully restored and re-setup
+                        }
                     },
-                    KeyCode::Enter => {
+                    /*
+                       KeyCode::Enter => {
                     // View post details functionality can be implemented here
                     }
                     */

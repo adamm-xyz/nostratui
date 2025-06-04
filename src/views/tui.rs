@@ -34,6 +34,17 @@ pub fn restore_terminal(terminal: &mut Terminal<ratatui::backend::CrosstermBacke
     terminal.show_cursor()
 }
 
+// Helper function to temporarily restore terminal for external commands
+pub fn with_restored_terminal<F, T>(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>, f: F) -> io::Result<T>
+where
+    F: FnOnce() -> T,
+{
+    restore_terminal(terminal)?;
+    let result = f();
+    *terminal = setup_terminal()?;
+    Ok(result)
+}
+
 pub fn render_ui<B: ratatui::backend::Backend>(
     f: &mut Frame<B>,
     stateful_list: &mut StatefulList<Post>,
