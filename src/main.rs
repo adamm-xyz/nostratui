@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ if flags.post() => {
             // Post a new note
             match create_post_via_editor() {
-                Ok(note) => post_note(&client, note).await?,
+                Ok(note) => post_note(&client, note, None).await?,
                 Err(e) => eprintln!("Error creating post: {}", e),
             }
         },

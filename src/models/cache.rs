@@ -26,21 +26,23 @@ pub fn get_cache_file() -> Result<PathBuf, NostratuiError> {
     Ok(app_cache_dir.join("posts.json"))
 }
 
-pub fn load_cached_posts() -> Result<Vec<Post>,NostratuiError> {
+pub fn load_cached_posts() -> Result<Vec<Post>, NostratuiError> {
     let cache_path = get_cache_file()?;
-        match fs::read_to_string(&cache_path) {
-        Ok(data) => {
-            serde_json::from_str(&data)
-                .map_err(|e| NostratuiError::Cache(format!("Failed to parse cache data: {}", e)))
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            // If file doesn't exist, return empty vector
-            Ok(Vec::new())
-        },
-        Err(e) => {
-            Err(NostratuiError::Cache(format!("Failed to read cache file: {}", e)))
+    if !cache_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let cache_data = fs::read_to_string(cache_path)?;
+    let mut posts: Vec<Post> = serde_json::from_str(&cache_data)?;
+    
+    // Ensure all posts have a mentions field, defaulting to empty if missing
+    for post in &mut posts {
+        if post.mentions.is_empty() {
+            post.mentions = Vec::new();
         }
     }
+    
+    Ok(posts)
 }
 
 pub fn save_posts_to_cache(new_posts: Vec<Post>) -> Result<(), NostratuiError> {

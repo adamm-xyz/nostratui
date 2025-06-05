@@ -1,18 +1,19 @@
 use std::io;
 use ratatui::{
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, Paragraph, ListState},
     layout::{Layout, Constraint, Direction},
     style::{Style, Color, Modifier},
-    Terminal, Frame,
-    text::Line,
-    prelude::{Span},
+    text::{Line, Span},
+    Frame,
+    prelude::Alignment,
+    Terminal,
 };
 use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
     event::{DisableMouseCapture, EnableMouseCapture},
 };
-
+use nostr_sdk::Timestamp;
 use crate::models::Post;
 use crate::views::widgets::StatefulList;
 
@@ -65,12 +66,29 @@ pub fn render_ui<B: ratatui::backend::Backend>(
         .iter()
         .map(|post| {
             // Create the header line with username and timestamp
-            let header = Line::from(vec![
+            let mut header_parts = vec![
                 Span::styled(
                     format!("{} - {} posted:", post.datetime, post.user),
                     Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
                 )
-            ]);
+            ];
+
+            // Add thread information if it's a reply
+            if post.is_reply() {
+                let thread_indicator = if post.is_thread_reply() {
+                    "↳ Reply in thread"
+                } else {
+                    "↳ Reply"
+                };
+                header_parts.push(
+                    Span::styled(
+                        format!(" {}", thread_indicator),
+                        Style::default().fg(Color::Yellow)
+                    )
+                );
+            }
+
+            let header = Line::from(header_parts);
             
             // Create wrapped content by manually splitting the text
             let content_lines = wrap_text(&post.content, available_width as usize);
@@ -85,6 +103,22 @@ pub fn render_ui<B: ratatui::backend::Backend>(
             for line in content_lines {
                 all_lines.push(Line::from(line));
             }
+
+            // Add thread information footer if there are mentions
+            if !post.mentions.is_empty() {
+                all_lines.push(Line::from(""));
+                all_lines.push(Line::from(vec![
+                    Span::styled(
+                        "Mentions: ",
+                        Style::default().fg(Color::Gray)
+                    ),
+                    Span::styled(
+                        post.mentions.join(", "),
+                        Style::default().fg(Color::Gray)
+                    )
+                ]));
+            }
+
             all_lines.push(Line::from("")); // Empty line for spacing at the end
 
             ListItem::new(all_lines)
@@ -156,4 +190,83 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
     }
     
     wrapped_lines
+}
+
+pub struct ThreadView {
+    pub posts: Vec<Post>,
+    pub state: ListState,
+}
+
+impl ThreadView {
+    pub fn new(posts: Vec<Post>) -> Self {
+        let mut state = ListState::default();
+        state.select(Some(0));
+        Self { posts, state }
+    }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.posts.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.posts.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+}
+
+pub fn render_thread_view<B: ratatui::backend::Backend>(f: &mut Frame<B>, thread_view: &ThreadView) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+        ])
+        .split(f.size());
+
+    // Title
+    let title = Paragraph::new("Thread View (q to return)")
+        .style(Style::default().add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    f.render_widget(title, chunks[0]);
+
+    // Thread posts
+    let items: Vec<ListItem> = thread_view.posts
+        .iter()
+        .map(|post| {
+            let content = format!(
+                "{} - {}\n{}",
+                post.user,
+                post.datetime,
+                post.content
+            );
+            ListItem::new(content)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(Block::default().title("Thread"))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+        .highlight_symbol("> ");
+
+    f.render_stateful_widget(list, chunks[1], &mut thread_view.state.clone());
 }

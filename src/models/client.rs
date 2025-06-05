@@ -1,12 +1,10 @@
-use nostr_sdk::prelude::*;
 use std::time::Duration;
-use anyhow::{Context, Result};
-use chrono::{DateTime, TimeZone, Local, Utc};
-use tokio::time::timeout;
-
-use crate::error::NostratuiError;
+use chrono::{DateTime, Local, Utc, TimeZone};
+use nostr_sdk::prelude::*;
 use crate::models::post::Post;
-
+use crate::error::NostratuiError;
+use anyhow::{Context, Result};
+use tokio::time::timeout;
 
 #[derive(Clone)]
 pub struct NostrClient {
@@ -202,18 +200,59 @@ impl NostrClient {
                             let local_time: DateTime<Local> = DateTime::from(utc_time);
                             let datetime = local_time.format("%H:%M %h-%d-%Y").to_string();
                             
+                            // Extract thread information from tags
+                            let mut root_id = None;
+                            let mut reply_id = None;
+                            let mut mentions = Vec::new();
+                            let mut participants = Vec::new();
+
+                            // Process tags for thread information
+                            for tag in event.tags.iter() {
+                                let tag = (*tag).clone();
+                                let vec = tag.to_vec();
+                                if vec.len() >= 2 {
+                                    match vec[0].as_str() {
+                                        "e" => {
+                                            let event_id = vec[1].clone();
+                                            if vec.len() >= 4 {
+                                                match vec[3].as_str() {
+                                                    "root" => root_id = Some(event_id),
+                                                    "reply" => reply_id = Some(event_id),
+                                                    _ => mentions.push(event_id),
+                                                }
+                                            } else {
+                                                // Handle deprecated positional e tags
+                                                if vec.len() == 2 {
+                                                    reply_id = Some(event_id);
+                                                } else if vec.len() == 3 {
+                                                    root_id = Some(event_id);
+                                                }
+                                            }
+                                        }
+                                        "p" => {
+                                            participants.push(vec[1].clone());
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            
                             contact_posts.push(Post {
                                 user: user.clone(),
                                 timestamp: event.created_at.as_u64(),
                                 datetime,
                                 content: event.content.to_string(),
                                 id: event.id.to_hex(),
+                                root_id,
+                                reply_id,
+                                mentions,
+                                participants,
                             });
                         }
                         Ok(contact_posts)
                     }
-                    Ok(Err(e)) => Err(anyhow::anyhow!("Failed to fetch events: {}", e)),
-                    Err(_) => Err(anyhow::anyhow!("Timeout fetching events")),
+                    Ok(Err(e)) => Err(NostratuiError::NostrSdk(e.to_string())),
+                    Err(_) => Err(NostratuiError::NostrSdk("Timeout fetching events".to_string())),
                 }
             }));
         }
@@ -229,11 +268,107 @@ impl NostrClient {
         Ok(new_posts)
     }
 
-
-    pub async fn post_note(&self, note: String) -> Result<(),NostratuiError> {
-        let builder = EventBuilder::text_note(note).pow(20);
+    pub async fn post_note(&self, note: String, reply_to: Option<(String, String)>) -> Result<(),NostratuiError> {
+        let mut builder = EventBuilder::text_note(note).pow(20);
+        
+        // If this is a reply, add the appropriate e tags
+        if let Some((root_id, reply_id)) = reply_to {
+            // Add root tag
+            let root_tag = Tag::parse(["e", &root_id, "", "root"])
+                .map_err(|e| NostratuiError::NostrSdk(e.to_string()))?;
+            builder = builder.tag(root_tag);
+            
+            // Add reply tag if it's different from root
+            if reply_id != root_id {
+                let reply_tag = Tag::parse(["e", &reply_id, "", "reply"])
+                    .map_err(|e| NostratuiError::NostrSdk(e.to_string()))?;
+                builder = builder.tag(reply_tag);
+            }
+        }
+            
         self.client.send_event_builder(builder).await?;
         Ok(())
+    }
+
+    pub async fn fetch_thread(&self, root_id: &str) -> Result<Vec<Post>, NostratuiError> {
+        let root_event_id = EventId::from_hex(root_id)
+            .map_err(|e| NostratuiError::NostrSdk(e.to_string()))?;
+
+        // Create a filter to get all posts in the thread
+        let filter = Filter::new()
+            .kind(Kind::TextNote)
+            .event(root_event_id);
+
+        let events = self.client.fetch_events(filter, Duration::from_secs(30)).await?;
+        
+        // Convert events to posts and sort by timestamp
+        let mut posts: Vec<Post> = events.into_iter()
+            .map(|event| {
+                let root_id = event.tags.iter()
+                    .find(|t| {
+                        let tag = (*t).clone();
+                        let vec = tag.to_vec();
+                        vec.get(0) == Some(&"e".to_string()) && vec.get(3) == Some(&"root".to_string())
+                    })
+                    .and_then(|t| {
+                        let tag = (*t).clone();
+                        tag.to_vec().get(1).cloned()
+                    });
+
+                let reply_id = event.tags.iter()
+                    .find(|t| {
+                        let tag = (*t).clone();
+                        let vec = tag.to_vec();
+                        vec.get(0) == Some(&"e".to_string()) && vec.get(3) == Some(&"reply".to_string())
+                    })
+                    .and_then(|t| {
+                        let tag = (*t).clone();
+                        tag.to_vec().get(1).cloned()
+                    });
+
+                let mentions = event.tags.iter()
+                    .filter(|t| {
+                        let tag = (*t).clone();
+                        let vec = tag.to_vec();
+                        vec.get(0) == Some(&"e".to_string()) && 
+                        vec.get(3) != Some(&"root".to_string()) && 
+                        vec.get(3) != Some(&"reply".to_string())
+                    })
+                    .filter_map(|t| {
+                        let tag = (*t).clone();
+                        tag.to_vec().get(1).cloned()
+                    })
+                    .collect();
+
+                let participants = event.tags.iter()
+                    .filter(|t| {
+                        let tag = (*t).clone();
+                        let vec = tag.to_vec();
+                        vec.get(0) == Some(&"p".to_string())
+                    })
+                    .filter_map(|t| {
+                        let tag = (*t).clone();
+                        tag.to_vec().get(1).cloned()
+                    })
+                    .collect();
+
+                Post {
+                    id: event.id.to_hex(),
+                    user: event.pubkey.to_hex(),
+                    content: event.content,
+                    timestamp: event.created_at.as_u64(),
+                    datetime: event.created_at.to_human_datetime(),
+                    root_id,
+                    reply_id,
+                    mentions,
+                    participants,
+                }
+            })
+            .collect();
+        
+        posts.sort_by_key(|post| post.timestamp);
+        
+        Ok(posts)
     }
 
 }
