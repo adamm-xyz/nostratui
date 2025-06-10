@@ -72,3 +72,12 @@ cargo run
 | r | reply to selected post|
 | q | quit |
 
+## Roadmap
+- [x] NIP-01, fetch and display basic notes
+- [x] NIP-02, fetch follow list
+- [ ] Display contacts page
+- [ ] NIP-05 display user name handles
+- [ ] Key generation with NIP-06
+- [ ] NIP-08 display mentions in posts
+- [ ] NIP-09 issue delete requests
+- [x] NIP-10 show note threads (still WIP)
